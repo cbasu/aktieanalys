@@ -30,4 +30,4 @@ new_dict = {date_val: [k2_val, k3_val, k4_val]
             for date_val, k2_val, k3_val, k4_val in zip(df["Date"], df["Price"], df["Invest"], df["Norm_invest"])}
 
 for key, val in new_dict.items():
-    print(key, val)
+    print(key,val)
