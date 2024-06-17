@@ -1,82 +1,78 @@
 #!/usr/bin/python3
-import numpy as np
 import pandas as pd
-import itertools
-from sklearn.linear_model import LinearRegression
-import matplotlib.pyplot as plt
+import json
+from datetime import datetime
+from stockutils import utils
+from pathlib import Path
+import readline
+import rlcompleter
 
-def split_data(start, end, fd):
-    pd = {}
-    pd["Date"] = fd["Date"][start:end]
-    #pd["Open"] = fd["Open"][start:end]
-    #pd["High"] = fd["High"][start:end]
-    #pd["Low"] = fd["Low"][start:end]
-    #pd["Close"] = fd["Close"][start:end]
-    pd["Volume"] = fd["Volume"][start:end]
-    avg = (np.array(fd["Open"][start:end]) + np.array(fd["High"][start:end]) + np.array(fd["Low"][start:end]) + np.array(fd["Close"][start:end])) / 4
-    pd["Price"] = avg.tolist()
-    pd["Trade"] = np.multiply(pd["Volume"],pd["Price"])
-    acc_vol = list(itertools.accumulate(pd["Volume"]))
-    acc_trade = list(itertools.accumulate(pd["Trade"]))
-    pd["Avg_price"] = np.divide(acc_trade, acc_vol)
-    diff = np.array(pd["Price"]) - np.array(pd["Avg_price"])
-    invst = diff * np.array(pd["Volume"])
-    pd["Invest"] = list(itertools.accumulate(invst.tolist()))
-    invst = np.array(pd["Invest"])
-    norm_invst = (invst - invst.mean()) / invst.std()
-    pd["Norm_invest"] = norm_invst.tolist()
-    x = np.arange(start, end).reshape(-1, 1)  # Reshape for sklearn
-    y = norm_invst
-    # Create a linear regression model
-    model = LinearRegression()
-    # Fit the model
-    model.fit(x, y)
-    # Get the coefficients
-    pd["Intercept"] = model.intercept_
-    pd["Slope"] = model.coef_[0]
+# This function will be called to complete the input
+def completer(text, state):
+    options = [i for i in commands if i.startswith(text)]
+    if state < len(options):
+        return options[state]
+    else:
+        return None
 
-    #y_pred = model.predict(x)
-    #plt.scatter(x, y, color='blue', label='Data points')
-    #plt.plot(x, y_pred, color='red', label='Regression line')
-    #plt.xlabel('x')
-    #plt.ylabel('y')
-    #plt.legend()
-    #plt.show()
+excel_file = pd.ExcelFile("aktier.xlsx")
 
-    return pd
+# Get the sheet names
+sheet_names = excel_file.sheet_names
+del excel_file
 
-df = pd.read_excel('aktier.xlsx', sheet_name = "boliden",skiprows=3)
+for name in sheet_names:
+    if name == "list" or name == "portfolio-table":
+        continue
+    df = pd.read_excel("aktier.xlsx", sheet_name=name, skiprows=3)
+    file_path = "data/"+name+".json"
+    d = utils.rd_d(file_path)
 
-np_avg = (np.array(df["Open"]) + np.array(df["High"]) + np.array(df["Low"]) + np.array(df["Close"])) / 4
-df["Price"] = np_avg.tolist()
-del np_avg
-df["Trade"] = np.multiply(df["Volume"],df["Price"])
-df["Acc_vol"] = list(itertools.accumulate(df["Volume"]))
-df["Acc_trade"] = list(itertools.accumulate(df["Trade"]))
-df["Avg_price"] = np.divide(df["Acc_trade"], df["Acc_vol"])
-np_diff = np.array(df["Price"]) - np.array(df["Avg_price"])
-np_invst = np_diff * np.array(df["Volume"])
-df["Invest"] = list(itertools.accumulate(np_invst.tolist()))
-del np_diff 
-del np_invst
+    if "Date" not in df:
+        utils.analyse(name, 60, d)
+        utils.analyse(name, 120, d)
+        utils.analyse(name, 360, d)
+    else:
+        start = len(df["Date"])
+# Convert Date column to string format
+        df["Date"] = df["Date"].apply(lambda x: x.strftime('%Y-%m-%d'))
+# append dataframe to dictionary
+        d = utils.append_df2d(df,d)
 
-data = np.array(df["Invest"])
-norm_data = (data - data.mean()) / data.std()
-df["Norm_invest"] = norm_data.tolist()
-del data
-del norm_data
-
-#for i, x in enumerate(df["Date"]):
-#    df["Date"][i] = pd.to_datetime(x).date()
-
-df1 = split_data(0,60,df)
+        utils.analyse(name, 60, d)
+        utils.analyse(name, 120, d)
+        utils.analyse(name, 360, d)
 
 
-#for val in df1["Avg_price"]:
-#    print(val)
+# Write the dictionary to a JSON file
+    with open(file_path, 'w') as json_file:
+        json.dump(d, json_file, indent=4)
 
-new_dict = {date_val: [k2_val, k3_val, k4_val] 
-            for date_val, k2_val, k3_val, k4_val in zip(df["Date"], df["Price"], df["Invest"], df["Norm_invest"])}
+a = []
+for name in sheet_names:
+    file_path = "data/"+name+".json"
+    d = utils.rd_d(file_path)
+    a.append(len(d["Date"])
 
-#for key, val in new_dict.items():
-#    print(key,val)
+directory = Path('data')
+json_files = list(directory.rglob('*.json'))
+
+commands=["exit"]
+# Print the list of .json files
+for file in json_files:
+    name = str(file).split('/')[-1].split('.')[0]
+    commands.append(name)
+
+# Configure readline to use the completer function
+readline.set_completer(completer)
+# Use tab for completion
+readline.parse_and_bind("tab: complete")
+
+# Simple loop to take user input
+while True:
+    user_input = input("Enter: ")
+    if user_input == 'exit':
+        break
+    name = "data/" + user_input + ".json"
+    d = utils.rd_d(name)
+    utils.plot1(name, d)
