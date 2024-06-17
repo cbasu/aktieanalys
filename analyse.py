@@ -10,7 +10,6 @@ from stockutils import utils
 begin = "2021-01-01"
 today = datetime.today().date()
 
-
 tickers=["BOL", "BONAV-B", "CARE", "INVE-B", "TEL2-B", "EKTA-B", "EPI-A","SHB-A", "PEAB-B", "ERIC-B", "SSAB-B", "VOLV-B", "VOLCAR-B", "PEAB-B", "DOM"]
 #tickers=["CARE.ST"]
 
@@ -27,7 +26,7 @@ if user_input == "y":
     for stock in tickers:
         print(stock)
         start = begin
-        end = "2024-06-14"
+        end = today
         file = "yfdata/"+stock+".json"
         d = utils.rd_d(file)
         if d:
