@@ -10,8 +10,13 @@ from stockutils import utils
 begin = "2021-01-01"
 today = datetime.today().date()
 
-tickers=["BOL", "BONAV-B", "CARE", "INVE-B", "TEL2-B", "EKTA-B", "EPI-A","SHB-A", "PEAB-B", "ERIC-B", "SSAB-B", "VOLV-B", "VOLCAR-B", "PEAB-B", "DOM"]
-#tickers=["CARE.ST"]
+#tickers = ['8TRA', 'ABB', 'BOL', 'BONAV-B', 'CARE', 'DOM', 'EKTA-B', 'EPI-A', 'ERIC-B', 'INDU-C', 'INVE-B', 'NIBE-B', 'PEAB-B', 'REJL-B', 'SHB-A', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'VIVA', 'VOLCAR-B', 'VOLV-B']
+tickers = ['8TRA']
+
+
+#sorted_list = sorted(tickers)
+#print(sorted_list)
+#exit(1)
 
 # This function will be called to complete the input
 def completer(text, state):
@@ -74,5 +79,6 @@ while True:
         break
     name = "yfdata/" + user_input + ".json"
     d = utils.rd_d(name)
-    utils.plot1(name, d)
+    utils.plot(name, d)
+    #utils.gpplot(name, d)
 

@@ -7,6 +7,7 @@ import os
 import sys
 import json
 from sklearn.linear_model import LinearRegression
+import gnuplotlib as gp
 # Define a function to suppress stdout
 class SuppressOutput:
     def __enter__(self):
@@ -97,70 +98,66 @@ def analyse(name, days, d):
         key = "Slope"
     d[key]=[]
     
-    #for i in range(len(d["Date"])-days+2):
     for i in range(len(d["Date"])):
         if i+days == len(d["Date"]):
             break
-        d1 = split_data(name, i,i+days-1,d)
+        d1 = slope(i,i+days-1,d)
         d[key].append(d1["Slope"])
 
-def plot(name, l, yi):
-    x = np.arange(0, l).reshape(-1, 1)  # Reshape for sklearn
-    y = np.array(yi)
-    plt.scatter(x, y, color='blue', label='Data points')
-    plt.title(name)
-    plt.xlabel('date')
-    plt.ylabel('slope')
-    plt.legend()
-    plt.show()
-
-def plot1(name, d):
+def gpplot(name, d):
     l = len(d["Slope60"])
     ld = len(d["Date"])
+    x = np.array(d["Date"][60-1:ld-1]) 
+    y = np.array(d["Slope60"])
+    # Create a plot
+    gp.plot(x, y, _with='lines', title=name, xlabel='date', ylabel='slope')
+
+def plot_i(ax, x, y1, y2, xname, y1name):
+    ax.plot(x, y1)
+    # Hide x-axis values and labels
+    ax.set_xticks([])
+    ax.set_xlabel(xname)
+    ax.set_ylabel(y1name)
+    # Create the second y-axis sharing the same x-axis
+    axr = ax.twinx()
+    axr.plot(x, y2, 'g-', label='close')  
+    
+
+def plot(name, d):
+    ld = len(d["Date"])
+    l = len(d["Slope60"])
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+    fig.suptitle(name, fontsize=12)
     x = d["Date"][60-1:ld-1] 
     y = d["Slope60"]
     y2 = d["Close"][60-1:ld-1]
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
     # Set a single title for the entire figure
-    fig.suptitle('Overall Title for All Subplots', fontsize=16)
-    ax1.plot(x, y)
-    # Hide x-axis values and labels
-    ax1.set_xticks([])
-    ax1.set_xlabel('date')
-    ax1.set_ylabel('Slope60')
-# Create the second y-axis sharing the same x-axis
-    ax1r = ax1.twinx()
-    ax1r.plot(x, y2, 'g-', label='y2')  # 'b-' means blue solid line
-    
+    plot_i(ax1, x, y, y2, "date", "slope60")
+
     l = len(d["Slope120"])
-    x = [i for i in range(l)]
+    x = d["Date"][120-1:ld-1] 
     y = d["Slope120"]
-    ax2.plot(x, y)
-    ax2.set_title(name)
-    ax2.set_xlabel('date')
-    ax2.set_ylabel('Slope120')
+    y2 = d["Close"][120-1:ld-1]
+    plot_i(ax2, x, y, y2, "date", "slope120")
 
     l = len(d["Slope360"])
-    x = [i for i in range(l)]
+    #x = [i for i in range(l)]
+    x = d["Date"][360-1:ld-1] 
     y = d["Slope360"]
-    ax3.plot(x, y)
-    ax3.set_title(name)
-    ax3.set_xlabel('date')
-    ax3.set_ylabel('Slope360')
-# Adjust layout to prevent overlap
+    y2 = d["Close"][360-1:ld-1]
+    plot_i(ax3, x, y, y2, "date", "slope360")
+    # Adjust layout to prevent overlap
     plt.tight_layout()
-
-# Show the plots
+    # Show the plots
     plt.show()
 
-
-def split_data(name, start, end, fd, plot="n"):
+def slope(start, end, fd):
     pd = {}
     pd["Date"] = fd["Date"][start:end]
     pd["Volume"] = fd["Volume"][start:end]
-    #avg = np.array(fd["Close"][start:end])
-    avg = (np.array(fd["Open"][start:end]) + np.array(fd["High"][start:end]) + np.array(fd["Low"][start:end]) + np.array(fd["Close"][start:end])) / 4
-    pd["Price"] = avg.tolist()
+    pd["Price"] = fd["Adj Close"][start:end]
+    #avg = (np.array(fd["Open"][start:end]) + np.array(fd["High"][start:end]) + np.array(fd["Low"][start:end]) + np.array(fd["Close"][start:end])) / 4
+    #pd["Price"] = avg.tolist()
     pd["Trade"] = np.multiply(pd["Volume"],pd["Price"])
     acc_vol = list(itertools.accumulate(pd["Volume"]))
     acc_trade = list(itertools.accumulate(pd["Trade"]))
@@ -180,15 +177,5 @@ def split_data(name, start, end, fd, plot="n"):
     # Get the coefficients
     pd["Intercept"] = model.intercept_
     pd["Slope"] = model.coef_[0]
-    
-    if plot == "yi":
-        y_pred = model.predict(x)
-        plt.scatter(x, y, color='blue', label='Data points')
-        plt.plot(x, y_pred, color='red', label='Regression line')
-        plt.title(name)
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.legend()
-        plt.show()
 
     return pd
