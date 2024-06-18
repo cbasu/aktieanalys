@@ -2,7 +2,6 @@
 import json
 from datetime import datetime, timedelta
 import yfinance as yf
-from pathlib import Path
 import readline
 import rlcompleter
 from stockutils import utils
@@ -10,8 +9,8 @@ from stockutils import utils
 begin = "2021-01-01"
 today = datetime.today().date()
 
-#tickers = ['8TRA', 'ABB', 'BOL', 'BONAV-B', 'CARE', 'DOM', 'EKTA-B', 'EPI-A', 'ERIC-B', 'INDU-C', 'INVE-B', 'NIBE-B', 'PEAB-B', 'REJL-B', 'SHB-A', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'VIVA', 'VOLCAR-B', 'VOLV-B']
-tickers = ['8TRA']
+tickers = ['8TRA', 'ABB', 'ATRLJ-B', 'BOL', 'BONAV-B', 'CARE', 'DOM', 'EKTA-B', 'EPI-A', 'ERIC-B', 'INDU-C', 'INVE-B', 'JM', 'NIBE-B', 'PEAB-B', 'REJL-B', 'SHB-B', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'VIVA', 'VOLCAR-B', 'VOLV-B']
+#tickers = ['8TRA']
 
 
 #sorted_list = sorted(tickers)
@@ -29,7 +28,6 @@ def completer(text, state):
 user_input = input("Run analysis (y/n): ")
 if user_input == "y":
     for stock in tickers:
-        print(stock)
         start = begin
         end = today
         file = "yfdata/"+stock+".json"
@@ -52,19 +50,8 @@ if user_input == "y":
         with open(file, 'w') as json_file:
             json.dump(d, json_file, indent=4)
 
-a = []
-for stock in tickers:
-    file = "yfdata/"+stock+".json"
-    d = utils.rd_d(file)
-    a.append(len(d["Date"]))
-
-directory = Path('yfdata')
-json_files = list(directory.rglob('*.json'))
-
 commands=["exit"]
-# Print the list of .json files
-for file in json_files:
-    name = str(file).split('/')[-1].split('.')[0]
+for name in tickers:
     commands.append(name)
 
 # Configure readline to use the completer function
@@ -77,8 +64,10 @@ while True:
     user_input = input("Enter: ")
     if user_input == 'exit':
         break
-    name = "yfdata/" + user_input + ".json"
-    d = utils.rd_d(name)
-    utils.plot(name, d)
-    #utils.gpplot(name, d)
+    if user_input in tickers:
+        fname = "yfdata/" + user_input + ".json"
+        d = utils.rd_d(fname)
+        utils.plot(user_input, d)
+    else:
+        print("Name does not exist: ", user_input)
 
