@@ -49,6 +49,12 @@ if user_input == "y":
         # Write the dictionary to a JSON file
         with open(file, 'w') as json_file:
             json.dump(d, json_file, indent=4)
+        
+for stock in tickers:
+    fname = "yfdata/" + stock + ".json"
+    d = utils.rd_d(fname)
+    reco = utils.is_close_to_max_min(d["Slope60"])
+    print(stock, reco)
 
 commands=["exit"]
 for name in tickers:
