@@ -33,6 +33,27 @@ def rd_d(f):
 
     return d
 
+def is_close_to_max_min(data, threshold_percentage=5):
+    # Calculate the minimum and maximum of the dataset
+    min_value = min(data)
+    max_value = max(data)
+    value = data[len(data)-1]
+    
+    # Calculate the range of the dataset
+    data_range = max_value - min_value
+    
+    # Calculate the threshold based on the percentage of the range
+    threshold = (threshold_percentage / 100.0) * data_range
+    
+    # Determine if the value is close to the minimum or maximum
+    reco = "neutral"
+    if abs(value - min_value) <= threshold:
+        reco = "buy"
+    elif abs(value - max_value) <= threshold:
+        reco = "sell"
+    return reco    
+
+
 def append_yf2d(df, d):
     if df.empty:
         return d
@@ -104,6 +125,7 @@ def analyse(name, days, d):
         d1 = slope(i,i+days-1,d)
         d[key].append(d1["Slope"])
 
+
 def gpplot(name, d):
     l = len(d["Slope60"])
     ld = len(d["Date"])
@@ -114,6 +136,7 @@ def gpplot(name, d):
 
 def plot_i(ax, x, y1, y2, xname, y1name):
     ax.plot(x, y1)
+    #ax.set_xlim(min(x), max(x)+4)
     # Hide x-axis values and labels
     ax.set_xticks([])
     ax.set_xlabel(xname)
