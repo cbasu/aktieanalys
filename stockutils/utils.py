@@ -7,7 +7,7 @@ import os
 import sys
 import json
 from sklearn.linear_model import LinearRegression
-import gnuplotlib as gp
+#import gnuplotlib as gp
 # Define a function to suppress stdout
 class SuppressOutput:
     def __enter__(self):
@@ -126,14 +126,14 @@ def analyse(name, days, d):
         d[key].append(d1["Slope"])
 
 
-def gpplot(name, d):
-    l = len(d["Slope60"])
-    ld = len(d["Date"])
-    x = np.array(d["Date"][60-1:ld-1]) 
-    y = np.array(d["Slope60"])
-    # Create a plot
-    gp.plot(x, y, _with='lines', title=name, xlabel='date', ylabel='slope')
-
+#def gpplot(name, d):
+#    l = len(d["Slope60"])
+#    ld = len(d["Date"])
+#    x = np.array(d["Date"][60-1:ld-1]) 
+#    y = np.array(d["Slope60"])
+#    # Create a plot
+#    gp.plot(x, y, _with='lines', title=name, xlabel='date', ylabel='slope')
+#
 def plot_i(ax, x, y1, y2, xname, y1name):
     ax.plot(x, y1)
     #ax.set_xlim(min(x), max(x)+4)
