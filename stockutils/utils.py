@@ -7,7 +7,7 @@ import os
 import sys
 import json
 from sklearn.linear_model import LinearRegression
-#import gnuplotlib as gp
+
 # Define a function to suppress stdout
 class SuppressOutput:
     def __enter__(self):
@@ -43,14 +43,21 @@ def is_close_to_max_min(data, threshold_percentage=5):
     data_range = max_value - min_value
     
     # Calculate the threshold based on the percentage of the range
-    threshold = (threshold_percentage / 100.0) * data_range
+    threshold5 = (5 / 100.0) * data_range
+    threshold10 = (10 / 100.0) * data_range
     
     # Determine if the value is close to the minimum or maximum
     reco = "neutral"
-    if abs(value - min_value) <= threshold:
-        reco = "buy"
-    elif abs(value - max_value) <= threshold:
-        reco = "sell"
+    valm = abs(value - min_value)
+    valM = abs(value - max_value)
+    if valm <= threshold5:
+        reco = "buy++"
+    elif valm <= threshold10:
+        reco = "buy+"
+    elif valM <= threshold5:
+        reco = "sell++"
+    elif valM <= threshold10:
+        reco = "sell+"
     return reco    
 
 
@@ -126,14 +133,6 @@ def analyse(name, days, d):
         d[key].append(d1["Slope"])
 
 
-#def gpplot(name, d):
-#    l = len(d["Slope60"])
-#    ld = len(d["Date"])
-#    x = np.array(d["Date"][60-1:ld-1]) 
-#    y = np.array(d["Slope60"])
-#    # Create a plot
-#    gp.plot(x, y, _with='lines', title=name, xlabel='date', ylabel='slope')
-#
 def plot_i(ax, x, y1, y2, xname, y1name):
     ax.plot(x, y1)
     #ax.set_xlim(min(x), max(x)+4)
