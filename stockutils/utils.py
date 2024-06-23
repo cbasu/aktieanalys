@@ -44,6 +44,7 @@ def is_close_to_max_min(data, threshold_percentage=5):
     data_range = max_value - min_value
     
     # Calculate the threshold based on the percentage of the range
+    threshold2 = (2 / 100.0) * data_range
     threshold5 = (5 / 100.0) * data_range
     threshold10 = (10 / 100.0) * data_range
     
@@ -51,14 +52,18 @@ def is_close_to_max_min(data, threshold_percentage=5):
     reco = "neutral"
     valm = abs(value - min_value)
     valM = abs(value - max_value)
-    if valm <= threshold5:
-        reco = "buy++"
+    if valm <= threshold2:
+        reco = "+++"
+    elif valm <= threshold5:
+        reco = "++"
     elif valm <= threshold10:
-        reco = "buy+"
+        reco = "+"
+    if valM <= threshold2:
+        reco = "---"
     elif valM <= threshold5:
-        reco = "sell++"
+        reco = "--"
     elif valM <= threshold10:
-        reco = "sell+"
+        reco = "-"
     return reco    
 
 
