@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 import sys
 import json
+import re
 from sklearn.linear_model import LinearRegression
 
 # Define a function to suppress stdout
@@ -127,13 +128,13 @@ def analyse(name, days, d):
     d[key]=[]
     
     for i in range(len(d["Date"])):
-        if i+days == len(d["Date"]):
+        if i+days == len(d["Date"])+1:
             break
-        d1 = slope(i,i+days-1,d)
+        d1 = slope(i,i+days,d)
         d[key].append(d1["Slope"])
 
 
-def plot_i(ax, x, y1, y2, xname, y1name):
+def plot_i(name, ax, x, y1, y2, xname, y1name):
     ax.plot(x, y1)
     #ax.set_xlim(min(x), max(x)+4)
     # Hide x-axis values and labels
@@ -142,32 +143,53 @@ def plot_i(ax, x, y1, y2, xname, y1name):
     ax.set_ylabel(y1name)
     # Create the second y-axis sharing the same x-axis
     axr = ax.twinx()
-    axr.plot(x, y2, 'g-', label='close')  
-    
+    axr.plot(x, y2, 'g-', label='price')
+    bdate = []
+    sdate = []
+    with open("txn.txt", 'r') as file:
+        for line in file:
+            if re.search(name, line):
+                words = line.split()
+                if words[2] == "BUY":
+                    bdate.append(words[0])
+                elif words[2] == "SELL":
+                    sdate.append(words[0])
+    if bdate:
+        bval = []
+        for dat in bdate:
+            i = x.index(dat)
+            bval.append(y2[i])
+        axr.scatter(bdate, bval, label='Graph 2', color='k', marker='+', s=100, linewidths=2)
+    if sdate:
+        sval = []
+        for dat in sdate:
+            i = x.index(dat)
+            sval.append(y2[i])
+        axr.scatter(sdate, sval, label='Graph 3', color='r', marker='_', s=100, linewidths=2)
+    #print(bdate, bval)
 
 def plot(name, d):
     ld = len(d["Date"])
     l = len(d["Slope60"])
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
     fig.suptitle(name, fontsize=12)
-    x = d["Date"][60-1:ld-1] 
+    x = d["Date"][60-1:ld] 
     y = d["Slope60"]
-    y2 = d["Close"][60-1:ld-1]
+    y2 = d["Close"][60-1:ld]
     # Set a single title for the entire figure
-    plot_i(ax1, x, y, y2, "date", "slope60")
+    plot_i(name, ax1, x, y, y2, "date", "slope60")
 
     l = len(d["Slope120"])
-    x = d["Date"][120-1:ld-1] 
+    x = d["Date"][120-1:ld] 
     y = d["Slope120"]
-    y2 = d["Close"][120-1:ld-1]
-    plot_i(ax2, x, y, y2, "date", "slope120")
+    y2 = d["Close"][120-1:ld]
+    plot_i(name, ax2, x, y, y2, "date", "slope120")
 
     l = len(d["Slope360"])
-    #x = [i for i in range(l)]
-    x = d["Date"][360-1:ld-1] 
+    x = d["Date"][360-1:ld] 
     y = d["Slope360"]
-    y2 = d["Close"][360-1:ld-1]
-    plot_i(ax3, x, y, y2, "date", "slope360")
+    y2 = d["Close"][360-1:ld]
+    plot_i(name, ax3, x, y, y2, "date", "slope360")
     # Adjust layout to prevent overlap
     plt.tight_layout()
     # Show the plots
