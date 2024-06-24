@@ -5,6 +5,7 @@ import yfinance as yf
 import readline
 import rlcompleter
 from stockutils import utils
+from tabulate import tabulate
 
 begin = "2021-01-01"
 today = datetime.today().date()
@@ -49,12 +50,21 @@ if user_input == "y":
         # Write the dictionary to a JSON file
         with open(file, 'w') as json_file:
             json.dump(d, json_file, indent=4)
-        
+
+table = []
 for stock in tickers:
     fname = "yfdata/" + stock + ".json"
     d = utils.rd_d(fname)
     reco = utils.is_close_to_max_min(d["Slope60"])
-    print(stock, reco)
+    if reco == "neutral":
+        continue
+    table.append([stock, reco])
+
+# Sort data by the 2nd column (index 1)
+table = sorted(table, key=lambda x: x[1])
+headers = ["Name", "Rec60"]
+# Print the data in tabular format
+print(tabulate(table, headers=headers, tablefmt="plain"))
 
 commands=["exit"]
 for name in tickers:
