@@ -13,7 +13,7 @@ today = datetime.today().date()
 exchange = {
         "ST": ['8TRA', 'AAK', 'ABB', 'ATCO-B', 'ATRLJ-B', 'BOL', 'BONAV-B', 'CARE', 'COIC', 'DOM', 'EKTA-B', 'EPI-A', 'ERIC-B', 'ESSITY-B', 'HTRO', 'INDU-C', 'INVE-B', 'JM', 'NIBE-B', 'PEAB-B', 'REJL-B', 'SAND', 'SHB-B', 'SKF-B', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'VIVA', 'VOLCAR-B', 'VOLV-B'],
         #"ST": ['8TRA'],
-        "OL": []
+        "OL": ['PROT']
     }
 
 #tickers = ['8TRA']
