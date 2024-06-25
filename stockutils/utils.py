@@ -159,19 +159,31 @@ def plot_i(name, ax, x, y1, y2, xname, y1name):
                     bdate.append(words[0])
                 elif words[2] == "SELL":
                     sdate.append(words[0])
+    yval = []
+    xval = []
     if bdate:
-        bval = []
         for dat in bdate:
-            i = x.index(dat)
-            bval.append(y2[i])
-        axr.scatter(bdate, bval, label='Graph 2', color='k', marker='+', s=100, linewidths=2)
+            try:
+                i = x.index(dat)
+                yval.append(y2[i])
+                xval.append(dat)
+            except:
+                pass
+    if xval:
+        axr.scatter(xval, yval, label='Graph 2', color='k', marker='+', s=100, linewidths=2)
+    
+    xval = []
+    yval = []
     if sdate:
-        sval = []
         for dat in sdate:
-            i = x.index(dat)
-            sval.append(y2[i])
-        axr.scatter(sdate, sval, label='Graph 3', color='r', marker='_', s=100, linewidths=2)
-    #print(bdate, bval)
+            try:
+                i = x.index(dat)
+                yval.append(y2[i])
+                xval.append(dat)
+            except:
+                pass
+    if xval:
+        axr.scatter(yval, xval, label='Graph 3', color='r', marker='_', s=100, linewidths=2)
 
 def plot(name, d):
     ld = len(d["Date"])
