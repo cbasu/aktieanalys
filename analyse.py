@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+#####################!/usr/bin/python3
 import json
 from datetime import datetime, timedelta
 import yfinance as yf
@@ -11,8 +12,8 @@ begin = "2021-01-01"
 today = datetime.today().date()
 
 exchange = {
-        "ST": ['8TRA', 'AAK', 'ABB', 'ATCO-B', 'ATRLJ-B', 'BOL', 'BONAV-B', 'CARE', 'COIC', 'DOM', 'EKTA-B', 'EPI-A', 'ERIC-B', 'ESSITY-B', 'HTRO', 'INDU-C', 'INVE-B', 'JM', 'NIBE-B', 'PEAB-B', 'REJL-B', 'SAND', 'SHB-B', 'SKF-B', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'VIVA', 'VOLCAR-B', 'VOLV-B'],
-        #"ST": ['8TRA'],
+        "ST": ['8TRA', 'AAK', 'ABB', 'ATCO-B', 'ATRLJ-B', 'AXFO', 'BOL', 'BONAV-B', 'CARE', 'COIC', 'DOM', 'EKTA-B', 'EPI-A', 'ERIC-B', 'ESSITY-B', 'HM-B', 'HTRO', 'INDU-C', 'INVE-B', 'JM', 'LUMI', 'MEKO', 'NIBE-B', 'NMAN', 'PEAB-B', 'REJL-B', 'SAND', 'SHB-B', 'SKF-B', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'VIVA', 'VOLCAR-B', 'VOLV-B'],
+        #"ST": ['LUMI'],
         "OL": ['PROT']
     }
 
@@ -32,6 +33,7 @@ def completer(text, state):
 
 user_input = input("Run analysis (y/n): ")
 if user_input == "y":
+    
     #for stock in tickers:
     for key in exchange:
         tickers = exchange[key]
@@ -96,13 +98,15 @@ while True:
     user_input = input("Enter: ")
     if user_input == 'exit':
         break
-    inp = user_input.split('.')[0]
-    key = user_input.split('.')[1]
-    tickers = exchange[key]
-    if inp in tickers:
-        fname = "yfdata/" + user_input + ".json"
-        d = utils.rd_d(fname)
-        utils.plot(user_input, d)
-    else:
+    try:
+        inp = user_input.split('.')[0]
+        key = user_input.split('.')[1]
+        
+        tickers = exchange[key]
+        if inp in tickers:
+            fname = "yfdata/" + user_input + ".json"
+            d = utils.rd_d(fname)
+            utils.plot(user_input, d)
+    except:
         print("Name does not exist: ", user_input)
 

@@ -183,7 +183,7 @@ def plot_i(name, ax, x, y1, y2, xname, y1name):
             except:
                 pass
     if xval:
-        axr.scatter(yval, xval, label='Graph 3', color='r', marker='_', s=100, linewidths=2)
+        axr.scatter(xval, yval, label='Graph 3', color='r', marker='_', s=100, linewidths=2)
 
 def plot(name, d):
     ld = len(d["Date"])
