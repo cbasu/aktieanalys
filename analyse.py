@@ -12,8 +12,8 @@ begin = "2021-01-01"
 today = datetime.today().date()
 
 exchange = {
-        "ST": ['8TRA', 'AAK', 'ABB', 'ATCO-B', 'ATRLJ-B', 'AXFO', 'BOL', 'BONAV-B', 'CARE', 'COIC', 'DOM', 'EKTA-B', 'EPI-A', 'ERIC-B', 'ESSITY-B', 'HM-B', 'HTRO', 'INDU-C', 'INVE-B', 'JM', 'LUMI', 'MEKO', 'NIBE-B', 'NMAN', 'PEAB-B', 'REJL-B', 'SAND', 'SHB-B', 'SKF-B', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'VIVA', 'VOLCAR-B', 'VOLV-B'],
-        #"ST": ['LUMI'],
+        "ST": ['8TRA', 'AAK', 'AZA', 'ABB', 'ATCO-B', 'ATRLJ-B', 'AXFO', 'BOL', 'BONAV-B', 'CARE', 'COIC', 'DOM', 'EKTA-B', 'ELUX-B', 'EPI-A', 'EQT', 'ERIC-B', 'ESSITY-B', 'HM-B', 'HTRO', 'INDU-C', 'INVE-B', 'JM', 'LUMI', 'MEKO', 'NIBE-B', 'NMAN', 'PEAB-B', 'REJL-B', 'SAND', 'SAVE', 'SHB-B', 'SKF-B', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'TROAX', 'VIVA', 'VOLCAR-B', 'VOLV-B'],
+        #"ST": ['EQT', 'SAVE'],
         "OL": ['PROT']
     }
 
