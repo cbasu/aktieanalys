@@ -11,16 +11,38 @@ from tabulate import tabulate
 begin = "2021-01-01"
 today = datetime.today().date()
 
-exchange = {
-        "ST": ['8TRA', 'AAK', 'AZA', 'ABB', 'ATCO-B', 'ATRLJ-B', 'AXFO', 'BOL', 'BONAV-B', 'CARE', 'COIC', 'DOM', 'EKTA-B', 'ELUX-B', 'EPI-A', 'EQT', 'ERIC-B', 'ESSITY-B', 'HM-B', 'HTRO', 'INDU-C', 'INVE-B', 'JM', 'LUMI', 'MEKO', 'NIBE-B', 'NMAN', 'PEAB-B', 'REJL-B', 'SAND', 'SAVE', 'SHB-B', 'SKF-B', 'SSAB-B', 'SWED-A', 'TEL2-B', 'TELIA', 'TROAX', 'VIVA', 'VOLCAR-B', 'VOLV-B'],
-        #"ST": ['EQT', 'SAVE'],
-        "OL": ['PROT']
-    }
 
-#tickers = ['8TRA']
+exchange = {}
 
-#sorted_list = sorted(tickers)
-#print(sorted_list)
+# Open the list and read line by line
+with open('list.txt', 'r') as file:
+    current_key = None
+    for line in file:
+        # Strip leading/trailing whitespace
+        line = line.strip()
+        
+        # Skip empty lines
+        if not line:
+            continue
+        
+        # Split the line into parts
+        parts = line.split()
+        
+        # Check if the current line contains a new key
+        if parts[0] != current_key:
+            current_key = parts[0]
+            if current_key not in exchange:
+                exchange[current_key] = {'symbol': [], 'name': []}
+        
+        # Append the name and val to the respective lists
+        exchange[current_key]['symbol'].append(parts[1])
+        exchange[current_key]['name'].append(parts[2])
+
+#
+#for key in exchange:
+#    tickers = exchange[key]
+#    sorted_list = sorted(tickers)
+#    print(sorted_list)
 #exit(1)
 
 # This function will be called to complete the input
@@ -36,7 +58,7 @@ if user_input == "y":
     
     #for stock in tickers:
     for key in exchange:
-        tickers = exchange[key]
+        tickers = exchange[key]["symbol"]
         for stock in tickers:
             start = begin
             end = today
@@ -64,7 +86,7 @@ if user_input == "y":
 table = []
 #for stock in tickers:
 for key in exchange:
-    tickers = exchange[key]
+    tickers = exchange[key]["symbol"] 
     for stock in tickers:
         nam = stock+"."+key
         fname = "yfdata/" + nam + ".json"
@@ -83,7 +105,7 @@ print(tabulate(table, headers=headers, tablefmt="plain"))
 commands=["exit"]
 #for name in tickers:
 for key in exchange:
-    tickers = exchange[key]
+    tickers = exchange[key]["symbol"] 
     for stock in tickers:
         nam = stock+"."+key
         commands.append(nam)
@@ -102,8 +124,11 @@ while True:
         inp = user_input.split('.')[0]
         key = user_input.split('.')[1]
         
-        tickers = exchange[key]
+        tickers = exchange[key]["symbol"] 
+
         if inp in tickers:
+            i = tickers.index(inp)
+            print(exchange[key]["name"][i])
             fname = "yfdata/" + user_input + ".json"
             d = utils.rd_d(fname)
             utils.plot(user_input, d)
