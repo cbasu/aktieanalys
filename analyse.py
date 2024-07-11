@@ -87,14 +87,15 @@ table = []
 #for stock in tickers:
 for key in exchange:
     tickers = exchange[key]["symbol"] 
-    for stock in tickers:
+    for i, stock in enumerate(tickers):
+        sname = exchange[key]["name"][i]
         nam = stock+"."+key
         fname = "yfdata/" + nam + ".json"
         d = utils.rd_d(fname)
         reco = utils.is_close_to_max_min(d["Slope60"])
         if reco == "neutral":
             continue
-        table.append([nam, reco])
+        table.append([sname, reco])
 
 # Sort data by the 2nd column (index 1)
 table = sorted(table, key=lambda x: x[1])
