@@ -132,7 +132,11 @@ while True:
             print(exchange[key]["name"][i])
             fname = "yfdata/" + user_input + ".json"
             d = utils.rd_d(fname)
+            utils.scan_data(d)
             utils.plot(user_input, d)
-    except:
-        print("Name does not exist: ", user_input)
+    except Exception as e:
+    # Print the error message
+        print(f"An error occurred: {e}")
+    #except:
+    #    print("Name does not exist: ", user_input)
 

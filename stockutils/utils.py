@@ -34,6 +34,109 @@ def rd_d(f):
 
     return d
 
+def group_contiguous_elements(lst):
+    if not lst:
+        return []
+
+    list2d = []
+    current_group = [lst[0]]
+
+    for i in range(1, len(lst)):
+        if lst[i] == lst[i - 1] + 1:
+            current_group.append(lst[i])
+        else:
+            list2d.append(current_group)
+            current_group = [lst[i]]
+    
+    list2d.append(current_group)  # Append the last group
+
+    return list2d
+
+def merge_ranges(xi, xr):
+
+    merge_list = [False] * len(xi)
+    for i in range(1, len(xi)):
+        first = xi[i][0]
+        prevlast = xi[i-1][len(xi[i-1])-1]
+        for j in range(len(xr)):
+            if prevlast < xr[j][0] < first:
+                merge_list[i] = False
+                break
+            else:
+                merge_list[i] = True
+    
+    lst = []
+    sublst = [0]
+    for i in range(1, len(merge_list)):
+        if merge_list[i]:
+            sublst.append(i)
+        else:
+            lst.append(sublst)
+            sublst = [i]
+    lst.append(sublst)
+
+    merged_xi = []
+    for sublist in lst:
+        subx = []
+        for i in sublist:
+            subx += xi[i]
+        merged_xi.append(subx)
+    return merged_xi
+
+def scan_data(data):
+    DAYS=60
+    ld = len(data["Date"])
+    x = data["Date"][DAYS-1:ld] 
+    y = data["Slope60"]
+    ymax = max(y)
+    ymin = min(y)
+    
+    # Calculate the range of the dataset
+    data_range = ymax - ymin
+    
+    # Calculate the threshold based on the percentage of the range
+    threshold = (5 / 100.0) * data_range   ## 2%
+    xmin_i = []
+    xmax_i = []
+    for i in range(len(x)):
+        valm = abs(y[i] - ymin)
+        valM = abs(y[i] - ymax)
+        #print(valm, valM, threshold)
+        if valm <= threshold:
+            xmin_i.append(i) 
+
+        if valM <= threshold:
+            xmax_i.append(i) 
+
+    xmin_i = group_contiguous_elements(xmin_i)
+    xmax_i = group_contiguous_elements(xmax_i)
+
+    xmin_i = merge_ranges(xmin_i, xmax_i)
+    xmax_i = merge_ranges(xmax_i, xmin_i)
+    
+    for indices in xmin_i:
+        v = 0
+        timestamp = 0
+        for ind in indices:
+            v += data["Adj Close"][ind+DAYS-1] 
+            date = datetime.strptime(data["Date"][ind+DAYS-1], "%Y-%m-%d")
+            timestamp += date.timestamp()
+
+        v = v / len(indices)
+        timestamp = timestamp / len(indices)
+        date = datetime.fromtimestamp(timestamp)
+        date = date.strftime("%Y-%m-%d")
+        print (x[indices[0]], x[indices[len(indices)-1]], v, date)
+    
+    print("MAX")
+    for xxx in xmax_i:
+        print (xxx[0], xxx[len(xxx)-1], x[xxx[0]], x[xxx[len(xxx)-1]])
+  
+
+    
+
+
+
 def is_close_to_max_min(data, threshold_percentage=5):
     # Calculate the minimum and maximum of the dataset
     min_value = min(data)
@@ -192,20 +295,20 @@ def plot(name, d):
     fig.suptitle(name, fontsize=12)
     x = d["Date"][60-1:ld] 
     y = d["Slope60"]
-    y2 = d["Close"][60-1:ld]
+    y2 = d["Adj Close"][60-1:ld]
     # Set a single title for the entire figure
     plot_i(name, ax1, x, y, y2, "date", "slope60")
 
     l = len(d["Slope120"])
     x = d["Date"][120-1:ld] 
     y = d["Slope120"]
-    y2 = d["Close"][120-1:ld]
+    y2 = d["Adj Close"][120-1:ld]
     plot_i(name, ax2, x, y, y2, "date", "slope120")
 
     l = len(d["Slope360"])
     x = d["Date"][360-1:ld] 
     y = d["Slope360"]
-    y2 = d["Close"][360-1:ld]
+    y2 = d["Adj Close"][360-1:ld]
     plot_i(name, ax3, x, y, y2, "date", "slope360")
     # Adjust layout to prevent overlap
     plt.tight_layout()
