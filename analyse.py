@@ -7,6 +7,7 @@ import readline
 import rlcompleter
 from stockutils import utils
 from tabulate import tabulate
+import re
 
 begin = "2021-01-01"
 today = datetime.today().date()
@@ -20,23 +21,31 @@ with open('list.txt', 'r') as file:
     for line in file:
         # Strip leading/trailing whitespace
         line = line.strip()
+        # Replace comma followed by one or more spaces with a comma
+        line = re.sub(r',\s+', ',', line)
         
         # Skip empty lines
         if not line:
             continue
         
         # Split the line into parts
-        parts = line.split()
+        parts = line.split(' ', 2)  # Split only on the first two spaces
+        
+        key = parts[0]
+        sym = parts[1]
+        # Remove the square brackets and split the third part into a list
+        names = parts[2].strip('[]').split(',')
         
         # Check if the current line contains a new key
-        if parts[0] != current_key:
-            current_key = parts[0]
+        if key != current_key:
+            current_key = key
             if current_key not in exchange:
                 exchange[current_key] = {'symbol': [], 'name': []}
         
         # Append the name and val to the respective lists
-        exchange[current_key]['symbol'].append(parts[1])
-        exchange[current_key]['name'].append(parts[2])
+        exchange[current_key]['symbol'].append(sym)
+        exchange[current_key]['name'].append(names)
+
 
 #
 #for key in exchange:
@@ -88,7 +97,7 @@ table = []
 for key in exchange:
     tickers = exchange[key]["symbol"] 
     for i, stock in enumerate(tickers):
-        sname = exchange[key]["name"][i]
+        sname = exchange[key]["name"][i][0]
         nam = stock+"."+key
         fname = "yfdata/" + nam + ".json"
         d = utils.rd_d(fname)
@@ -129,10 +138,10 @@ while True:
 
         if inp in tickers:
             i = tickers.index(inp)
-            print(exchange[key]["name"][i])
+            print(exchange[key]["name"][i][0])
             fname = "yfdata/" + user_input + ".json"
             d = utils.rd_d(fname)
-            utils.scan_data(d)
+            #utils.scan_data(d)
             utils.plot(user_input, d)
     except Exception as e:
     # Print the error message
