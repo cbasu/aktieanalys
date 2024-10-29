@@ -15,6 +15,14 @@ today = datetime.today().date()
 
 exchange = {}
 
+# This function will be called to complete the input
+def completer(text, state):
+    options = [i for i in commands if i.startswith(text)]
+    if state < len(options):
+        return options[state]
+    else:
+        return None
+
 # Open the list and read line by line
 with open('list.txt', 'r') as file:
     current_key = None
@@ -45,22 +53,6 @@ with open('list.txt', 'r') as file:
         # Append the name and val to the respective lists
         exchange[current_key]['symbol'].append(sym)
         exchange[current_key]['name'].append(names)
-
-
-#
-#for key in exchange:
-#    tickers = exchange[key]
-#    sorted_list = sorted(tickers)
-#    print(sorted_list)
-#exit(1)
-
-# This function will be called to complete the input
-def completer(text, state):
-    options = [i for i in commands if i.startswith(text)]
-    if state < len(options):
-        return options[state]
-    else:
-        return None
 
 user_input = input("Run analysis (y/n): ")
 if user_input == "y":
