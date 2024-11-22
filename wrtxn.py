@@ -53,7 +53,9 @@ df = df[(df['Typ av transaktion'].str.contains('Köp')) | (df['Typ av transaktio
 
 df['Typ av transaktion'] = df['Typ av transaktion'].replace('Köp', 'BUY')
 df['Typ av transaktion'] = df['Typ av transaktion'].replace('Sälj', 'SELL')
-df = df.drop(columns=['Valuta', 'Konto', 'Courtage', 'Valuta', 'ISIN', 'Resultat', 'Belopp', 'Antal', 'Kurs'])
+#df = df.drop(columns=['Valuta', 'Konto', 'Courtage', 'Valuta', 'ISIN', 'Resultat', 'Belopp', 'Antal', 'Kurs'])
+df = df.drop(columns=['Valutakurs', 'Konto', 'Courtage (SEK)', 'ISIN', 'Resultat', 'Belopp', 'Antal', 'Kurs'])
+
 df = pd.concat([df_old, df], axis=0)
 df = df.drop_duplicates()
 
