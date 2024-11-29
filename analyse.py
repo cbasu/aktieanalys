@@ -63,7 +63,10 @@ if user_input == "y":
         for stock in tickers:
             start = begin
             end = today
-            nam = stock+"."+key
+            if key == "US":
+                nam = stock
+            else:
+                nam = stock+"."+key
             file = "yfdata/"+nam+".json"
             d = utils.rd_d(file)
             if d:
@@ -79,6 +82,9 @@ if user_input == "y":
             utils.analyse(stock, 60, d)
             utils.analyse(stock, 120, d)
             utils.analyse(stock, 360, d)
+            if key == "US":
+                nam = stock+"."+key
+            file = "yfdata/"+nam+".json"
 
             # Write the dictionary to a JSON file
             with open(file, 'w') as json_file:
