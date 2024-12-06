@@ -65,16 +65,18 @@ if user_input == "y":
             end = today
             if key == "US":
                 nam = stock
+                file = "yfdata/"+nam+"."+key+".json"
             else:
                 nam = stock+"."+key
-            file = "yfdata/"+nam+".json"
+                file = "yfdata/"+nam+".json"
+            
             d = utils.rd_d(file)
             if d:
                 start = d["Date"][len(d["Date"])-1]
                 date_object = datetime.strptime(start, "%Y-%m-%d")
                 date_object = date_object + timedelta(days=1)
                 start = date_object.strftime("%Y-%m-%d")
-
+            
             # Fetch historical stock data
             df = yf.download(nam, start=start, end=end)
             d = utils.append_yf2d(df, d)
