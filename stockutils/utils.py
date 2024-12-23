@@ -287,6 +287,10 @@ def plot_i(name, ax, x, y1, y2, xname, y1name):
                 pass
     if xval:
         axr.scatter(xval, yval, label='Graph 3', color='r', marker='_', s=100, linewidths=2)
+    plt.grid(True, axis='both')  # Turn on grid lines
+
+    # Customize the grid lines (optional)
+    plt.grid(color='gray', linestyle='--', linewidth=0.5)
 
 def plot(name, d):
     ld = len(d["Date"])
@@ -311,6 +315,7 @@ def plot(name, d):
     y2 = d["Adj Close"][360-1:ld]
     plot_i(name, ax3, x, y, y2, "date", "slope360")
     # Adjust layout to prevent overlap
+
     plt.tight_layout()
     # Show the plots
     plt.show()

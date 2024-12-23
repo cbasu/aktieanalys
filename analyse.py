@@ -69,7 +69,6 @@ if user_input == "y":
             else:
                 nam = stock+"."+key
                 file = "yfdata/"+nam+".json"
-            
             d = utils.rd_d(file)
             if d:
                 start = d["Date"][len(d["Date"])-1]
