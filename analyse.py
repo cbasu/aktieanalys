@@ -77,7 +77,7 @@ if user_input == "y":
                 start = date_object.strftime("%Y-%m-%d")
             
             # Fetch historical stock data
-            df = yf.download(nam, start=start, end=end)
+            df = yf.download(nam, start=start, end=end, auto_adjust=False)
             d = utils.append_yf2d(df, d)
         
             utils.analyse(stock, 60, d)

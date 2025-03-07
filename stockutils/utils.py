@@ -175,6 +175,9 @@ def append_yf2d(df, d):
         return d
     # Reset the index to move the date from the index to a column
     df.reset_index(inplace=True)
+    # Flatten MultiIndex to get simple column names
+    df.columns = [col[0] for col in df.columns]  # Keep only the first level
+    #print(df.columns)
     # Convert Date column to string format
     df["Date"] = df["Date"].apply(lambda x: x.strftime('%Y-%m-%d'))
     if not d:
