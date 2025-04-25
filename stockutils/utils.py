@@ -332,6 +332,8 @@ def slope(start, end, fd):
     #pd["Price"] = avg.tolist()
     pd["Trade"] = np.multiply(pd["Volume"],pd["Price"])
     acc_vol = list(itertools.accumulate(pd["Volume"]))
+    acc_vol = [1 if x == 0 else x for x in acc_vol]  ## replace 0 vol with with avoid divide by 0
+
     acc_trade = list(itertools.accumulate(pd["Trade"]))
     pd["Avg_price"] = np.divide(acc_trade, acc_vol)
     diff = np.array(pd["Price"]) - np.array(pd["Avg_price"])
