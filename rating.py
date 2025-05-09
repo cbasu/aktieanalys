@@ -3,7 +3,114 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- Risk Metric Calculations ---
+# --- Piotroski F-Score Calculation (Full 9 Criteria) ---
+def calculate_piotroski_f_score(info, prev_info=None):
+    """
+    Calculate Piotroski F-Score (0-9) using current and previous year's data.
+    prev_info: dictionary with previous year's financials (if available).
+    """
+    score = 0
+    explanations = []
+
+    # 1. Positive Net Income
+    if info.get('netIncomeToCommon', 0) > 0:
+        score += 1
+        explanations.append("Positive net income")
+    else:
+        explanations.append("Negative net income")
+
+    # 2. Positive Operating Cash Flow
+    if info.get('operatingCashflow', 0) > 0:
+        score += 1
+        explanations.append("Positive operating cash flow")
+    else:
+        explanations.append("Negative operating cash flow")
+
+    # 3. Higher Return on Assets (ROA) than previous year
+    try:
+        roa = info.get('netIncomeToCommon', 0) / info.get('totalAssets', 1)
+        prev_roa = prev_info.get('netIncomeToCommon', 0) / prev_info.get('totalAssets', 1) if prev_info else None
+        if prev_roa is not None and roa > prev_roa:
+            score += 1
+            explanations.append("ROA improved")
+        elif prev_roa is not None:
+            explanations.append("ROA declined")
+        else:
+            explanations.append("ROA trend unavailable")
+    except Exception:
+        explanations.append("ROA calculation error")
+
+    # 4. Operating Cash Flow > Net Income
+    if info.get('operatingCashflow', 0) > info.get('netIncomeToCommon', 0):
+        score += 1
+        explanations.append("Operating cash flow > net income")
+    else:
+        explanations.append("Operating cash flow <= net income")
+
+    # 5. Lower Leverage (long-term debt/assets) than previous year
+    try:
+        leverage = info.get('longTermDebt', 0) / info.get('totalAssets', 1)
+        prev_leverage = prev_info.get('longTermDebt', 0) / prev_info.get('totalAssets', 1) if prev_info else None
+        if prev_leverage is not None and leverage < prev_leverage:
+            score += 1
+            explanations.append("Leverage decreased")
+        elif prev_leverage is not None:
+            explanations.append("Leverage increased")
+        else:
+            explanations.append("Leverage trend unavailable")
+    except Exception:
+        explanations.append("Leverage calculation error")
+
+    # 6. Higher Current Ratio than previous year
+    try:
+        cr = info.get('currentRatio', 0)
+        prev_cr = prev_info.get('currentRatio', 0) if prev_info else None
+        if prev_cr is not None and cr > prev_cr:
+            score += 1
+            explanations.append("Current ratio improved")
+        elif prev_cr is not None:
+            explanations.append("Current ratio declined")
+        else:
+            explanations.append("Current ratio trend unavailable")
+    except Exception:
+        explanations.append("Current ratio calculation error")
+
+    # 7. No new shares issued (compare shares outstanding)
+    shares = info.get('sharesOutstanding', 0)
+    prev_shares = prev_info.get('sharesOutstanding', 0) if prev_info else None
+    if prev_shares is not None and shares <= prev_shares:
+        score += 1
+        explanations.append("No new shares issued")
+    elif prev_shares is not None:
+        explanations.append("New shares issued")
+    else:
+        explanations.append("Share count trend unavailable")
+
+    # 8. Higher Gross Margin than previous year
+    gm = info.get('grossMargins', 0)
+    prev_gm = prev_info.get('grossMargins', 0) if prev_info else None
+    if prev_gm is not None and gm > prev_gm:
+        score += 1
+        explanations.append("Gross margin improved")
+    elif prev_gm is not None:
+        explanations.append("Gross margin declined")
+    else:
+        explanations.append("Gross margin trend unavailable")
+
+    # 9. Higher Asset Turnover than previous year
+    at = info.get('assetTurnover', 0)
+    prev_at = prev_info.get('assetTurnover', 0) if prev_info else None
+    if prev_at is not None and at > prev_at:
+        score += 1
+        explanations.append("Asset turnover improved")
+    elif prev_at is not None:
+        explanations.append("Asset turnover declined")
+    else:
+        explanations.append("Asset turnover trend unavailable")
+
+    return score, explanations
+
+# --- Other Risk Metric Calculations ---
 
 def calculate_altman_z(info):
     try:
@@ -15,25 +122,20 @@ def calculate_altman_z(info):
         market_cap = info.get('marketCap', 0)
         total_liab = info.get('totalLiab', 0)
         total_revenue = info.get('totalRevenue', 0)
-
         if total_assets == 0 or total_liab == 0:
             return None, "Insufficient data for Altman Z-score."
-
         A = (total_current_assets - total_current_liabilities) / total_assets
         B = retained_earnings / total_assets
         C = ebit / total_assets
         D = market_cap / total_liab
         E = total_revenue / total_assets
-
         z = 1.2 * A + 1.4 * B + 3.3 * C + 0.6 * D + 1.0 * E
-
         if z > 2.99:
             zone = "Safe zone (low bankruptcy risk)"
         elif z > 1.81:
             zone = "Grey zone (some risk)"
         else:
             zone = "Distress zone (high bankruptcy risk)"
-
         return z, zone
     except Exception as e:
         return None, f"Error in Z-score calculation: {e}"
@@ -53,25 +155,6 @@ def calculate_debt_to_capital(info):
         return total_debt / (total_debt + total_equity)
     else:
         return None
-
-def calculate_piotroski_f_score(info):
-    score = 0
-    # Profitability
-    if info.get('netIncomeToCommon', 0) > 0:
-        score += 1
-    if info.get('operatingCashflow', 0) > 0:
-        score += 1
-    if info.get('operatingCashflow', 0) > info.get('netIncomeToCommon', 0):
-        score += 1
-    # Liquidity
-    if info.get('currentRatio', 0) > 1:
-        score += 1
-    # Efficiency
-    if info.get('grossMargins', 0) > 0:
-        score += 1
-    if info.get('assetTurnover', 0) > 0:
-        score += 1
-    return score  # Max 6 in this simplified version
 
 # --- Scoring Functions ---
 
@@ -115,18 +198,91 @@ def score_valuation(info, adj):
     }
     return valuation_score, details
 
-def score_financial_strength(info, adj):
+def score_financial_strength(info, adj, prev_info=None):
+    # --- Classic metrics ---
     debt_to_equity = info.get("debtToEquity", 100) * adj["debt_factor"]
     quick_ratio = info.get("quickRatio", 1)
     current_ratio = info.get("currentRatio", 1)
-    financial_score = min(9, (10 - debt_to_equity / 20 + quick_ratio * 3 + current_ratio * 2))
+    # --- Solvency metrics ---
+    total_liab = info.get("totalLiab", 0)
+    total_debt = info.get("totalDebt", total_liab)
+    cashflow_from_ops = info.get("operatingCashflow", 0)
+    cash_flow_to_debt = (cashflow_from_ops / total_debt) if total_debt else None
+    # --- Risk metrics ---
+    z_score, z_zone = calculate_altman_z(info)
+    interest_coverage = calculate_interest_coverage(info)
+    debt_to_capital = calculate_debt_to_capital(info)
+    piotroski_score, piotroski_expl = calculate_piotroski_f_score(info, prev_info)
+    # --- Scoring ---
+    score = 10
+    # Debt to Equity (lower is better)
+    score -= min(debt_to_equity / 20, 3)
+    # Quick Ratio (higher is better)
+    score += min((quick_ratio - 1) * 2, 2)
+    # Current Ratio (higher is better)
+    score += min((current_ratio - 1.5) * 2, 2)
+    # Cash Flow to Debt (higher is better)
+    if cash_flow_to_debt is not None:
+        if cash_flow_to_debt >= 1.5:
+            score += 2
+        elif cash_flow_to_debt >= 1:
+            score += 1
+        elif cash_flow_to_debt >= 0.5:
+            score -= 1
+        else:
+            score -= 2
+    # Altman Z-score (higher is better)
+    if z_score is not None:
+        if z_score > 2.99:
+            score += 1
+        elif z_score > 1.81:
+            score += 0
+        else:
+            score -= 2
+    # Interest Coverage (higher is better)
+    if interest_coverage is not None:
+        if interest_coverage > 3:
+            score += 1
+        elif interest_coverage > 1.5:
+            score += 0
+        elif interest_coverage > 1:
+            score -= 1
+        else:
+            score -= 2
+    # Debt to Capital (lower is better)
+    if debt_to_capital is not None:
+        if debt_to_capital < 0.4:
+            score += 1
+        elif debt_to_capital < 0.6:
+            score += 0
+        elif debt_to_capital < 0.8:
+            score -= 1
+        else:
+            score -= 2
+    # Piotroski F-Score (higher is better, now out of 9)
+    if piotroski_score >= 7:
+        score += 2
+    elif piotroski_score >= 5:
+        score += 1
+    elif piotroski_score >= 3:
+        score -= 1
+    else:
+        score -= 2
+    score = max(1, min(10, score))
     details = {
         "debt_to_equity": debt_to_equity,
         "quick_ratio": quick_ratio,
         "current_ratio": current_ratio,
-        "score": financial_score
+        "cash_flow_to_debt": cash_flow_to_debt,
+        "z_score": z_score,
+        "z_zone": z_zone,
+        "interest_coverage": interest_coverage,
+        "debt_to_capital": debt_to_capital,
+        "piotroski_score": piotroski_score,
+        "piotroski_explanations": piotroski_expl,
+        "score": score
     }
-    return financial_score, details
+    return score, details
 
 def score_market_position(info):
     market_cap = info.get("marketCap")
@@ -139,7 +295,6 @@ def score_market_position(info):
             market_position_score += 2
         else:
             market_position_score += 1
-
     if recommendation_key == "buy":
         market_position_score += 2
     elif recommendation_key == "strongBuy":
@@ -165,102 +320,25 @@ def score_risk_volatility(info, adj):
     }
     return risk_score, details
 
-def score_bankruptcy_and_risk(info):
-    # Altman Z-score
-    z_score, z_zone = calculate_altman_z(info)
-    if z_score is None:
-        z_score_component = 5
-    elif z_score > 2.99:
-        z_score_component = 10
-    elif z_score > 1.81:
-        z_score_component = 6
-    else:
-        z_score_component = 2
-
-    # Cash Flow to Debt Ratio
-    total_liab = info.get("totalLiab", 0)
-    total_debt = info.get("totalDebt", total_liab)
-    cashflow_from_ops = info.get("operatingCashflow", 0)
-    cash_flow_to_debt = (cashflow_from_ops / total_debt) if total_debt else None
-    if cash_flow_to_debt is None:
-        cf_debt_component = 5
-    elif cash_flow_to_debt >= 1.5:
-        cf_debt_component = 10
-    elif cash_flow_to_debt >= 1:
-        cf_debt_component = 7
-    elif cash_flow_to_debt >= 0.5:
-        cf_debt_component = 4
-    else:
-        cf_debt_component = 1
-
-    # Interest Coverage Ratio
-    interest_coverage = calculate_interest_coverage(info)
-    if interest_coverage is None:
-        interest_coverage_component = 5
-    elif interest_coverage > 3:
-        interest_coverage_component = 10
-    elif interest_coverage > 1.5:
-        interest_coverage_component = 7
-    elif interest_coverage > 1:
-        interest_coverage_component = 4
-    else:
-        interest_coverage_component = 1
-
-    # Debt-to-Capital Ratio
-    debt_to_capital = calculate_debt_to_capital(info)
-    if debt_to_capital is None:
-        debt_to_capital_component = 5
-    elif debt_to_capital < 0.4:
-        debt_to_capital_component = 10
-    elif debt_to_capital < 0.6:
-        debt_to_capital_component = 7
-    elif debt_to_capital < 0.8:
-        debt_to_capital_component = 4
-    else:
-        debt_to_capital_component = 1
-
-    # Piotroski F-Score (simplified, max 6)
-    piotroski_score = calculate_piotroski_f_score(info)
-    if piotroski_score >= 5:
-        piotroski_component = 10
-    elif piotroski_score >= 4:
-        piotroski_component = 7
-    elif piotroski_score >= 2:
-        piotroski_component = 4
-    else:
-        piotroski_component = 1
-
-    # Average all risk components
-    risk_components = [
-        z_score_component,
-        cf_debt_component,
-        interest_coverage_component,
-        debt_to_capital_component,
-        piotroski_component
-    ]
-    bankruptcy_risk_score = sum(risk_components) / len(risk_components)
-    details = {
-        "z_score": z_score,
-        "z_zone": z_zone,
-        "cash_flow_to_debt": cash_flow_to_debt,
-        "interest_coverage": interest_coverage,
-        "debt_to_capital": debt_to_capital,
-        "piotroski_score": piotroski_score,
-        "score": bankruptcy_risk_score
-    }
-    return bankruptcy_risk_score, details
-
 # --- Main Analysis Function ---
 
 def get_stock_rating(ticker):
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
+        # Try to get previous annual data for Piotroski F-Score trends
+        prev_info = None
+        try:
+            hist = stock.get_financials(freq='annual')
+            if hist is not None and len(hist.columns) > 1:
+                # Use the previous year's data if available
+                prev_info = {k: hist[k][1] for k in hist.index if len(hist[k]) > 1}
+        except Exception:
+            prev_info = None
 
         if not info:
             logging.warning(f"No information found for ticker: {ticker}")
             return f"Error: No information found for ticker {ticker}."
-
         sector = info.get("sector", "Unknown Sector")
         sector_adjustments = {
             "Technology": {"pe_factor": 1.5, "debt_factor": 1.2, "beta_factor": 1.1},
@@ -280,19 +358,17 @@ def get_stock_rating(ticker):
         # --- Scoring ---
         growth_score, growth_details = score_profitability(info)
         valuation_score, valuation_details = score_valuation(info, adj)
-        financial_score, financial_details = score_financial_strength(info, adj)
+        financial_score, financial_details = score_financial_strength(info, adj, prev_info)
         market_position_score, market_details = score_market_position(info)
         risk_score, risk_details = score_risk_volatility(info, adj)
-        bankruptcy_risk_score, risk_metrics = score_bankruptcy_and_risk(info)
 
         # --- Weights ---
         weights = {
             "growth": 0.27,
             "valuation": 0.18,
-            "financial": 0.18,
+            "financial": 0.28,  # increased to reflect its importance
             "market": 0.18,
-            "risk": 0.09,
-            "bankruptcy": 0.10
+            "risk": 0.09
         }
 
         final_score = round(
@@ -300,19 +376,18 @@ def get_stock_rating(ticker):
             valuation_score * weights["valuation"] +
             financial_score * weights["financial"] +
             market_position_score * weights["market"] +
-            risk_score * weights["risk"] +
-            bankruptcy_risk_score * weights["bankruptcy"],
+            risk_score * weights["risk"],
             1
         )
 
         currency = info.get("currency", "Unknown")
 
         # --- Output Formatting ---
-        z_score_str = f"{risk_metrics['z_score']:.2f}" if risk_metrics['z_score'] is not None else "N/A"
-        cash_flow_to_debt_str = f"{risk_metrics['cash_flow_to_debt']:.2f}" if risk_metrics['cash_flow_to_debt'] is not None else "N/A"
-        interest_coverage_str = f"{risk_metrics['interest_coverage']:.2f}" if risk_metrics['interest_coverage'] is not None else "N/A"
-        debt_to_capital_str = f"{risk_metrics['debt_to_capital']:.2f}" if risk_metrics['debt_to_capital'] is not None else "N/A"
-        piotroski_score_str = f"{risk_metrics['piotroski_score']}/6"
+        z_score_str = f"{financial_details['z_score']:.2f}" if financial_details['z_score'] is not None else "N/A"
+        cash_flow_to_debt_str = f"{financial_details['cash_flow_to_debt']:.2f}" if financial_details['cash_flow_to_debt'] is not None else "N/A"
+        interest_coverage_str = f"{financial_details['interest_coverage']:.2f}" if financial_details['interest_coverage'] is not None else "N/A"
+        debt_to_capital_str = f"{financial_details['debt_to_capital']:.2f}" if financial_details['debt_to_capital'] is not None else "N/A"
+        piotroski_score_str = f"{financial_details['piotroski_score']}/9"
 
         analysis = f"""
 Fundamental Analysis for {ticker} ({sector}):
@@ -334,11 +409,16 @@ Valuation: {valuation_score}/10
 - Free Cash Flow: {valuation_details['free_cashflow']}
 - PEG Ratio: {valuation_details['peg_ratio']}
 
-Financial Strength: {financial_score}/10
+Financial Strength (inc. Bankruptcy Risk): {financial_score}/10
 - Debt to Equity: {financial_details['debt_to_equity']:.1f}%. {"Low debt level, strong balance sheet." if financial_details['debt_to_equity'] < 50 else "High debt."}
 - Liquidity (Quick Ratio): {financial_details['quick_ratio']:.1f}. {"Good ability to pay." if financial_details['quick_ratio'] > 1 else "Weak liquidity."}
 - Current Ratio: {financial_details['current_ratio']:.2f}
-- Cash Flow to Debt Ratio: {cash_flow_to_debt_str} {"(Warning: <1)" if risk_metrics['cash_flow_to_debt'] is not None and risk_metrics['cash_flow_to_debt'] < 1 else ""}
+- Cash Flow to Debt Ratio: {cash_flow_to_debt_str} {"(Warning: <1)" if financial_details['cash_flow_to_debt'] is not None and financial_details['cash_flow_to_debt'] < 1 else ""}
+- Altman Z-Score: {z_score_str} ({financial_details['z_zone']})
+- Interest Coverage Ratio: {interest_coverage_str}
+- Debt to Capital Ratio: {debt_to_capital_str}
+- Piotroski F-Score: {piotroski_score_str}
+  {"; ".join(financial_details['piotroski_explanations'])}
 
 Market Position: {market_position_score}/10
 - Market Cap: {market_details['market_cap']} {currency}
@@ -347,24 +427,16 @@ Market Position: {market_position_score}/10
 Risk & Volatility: {risk_score}/10
 - Beta: {risk_details['beta']:.2f}. {"Stable stock with low volatility." if risk_details['beta'] < 1 else "Higher volatility than the market."}
 
-Bankruptcy & Financial Risk: {bankruptcy_risk_score:.1f}/10
-- Altman Z-Score: {z_score_str} ({risk_metrics['z_zone']})
-- Cash Flow to Debt Ratio: {cash_flow_to_debt_str}
-- Interest Coverage Ratio: {interest_coverage_str}
-- Debt to Capital Ratio: {debt_to_capital_str}
-- Piotroski F-Score: {piotroski_score_str}
-
 Total Rating: {final_score}/10
 """
         return analysis
-
     except Exception as e:
         logging.error(f"An error occurred while analyzing {ticker}: {e}")
         return f"Error: An error occurred while analyzing {ticker}: {e}"
 
 # Example call
 if __name__ == "__main__":
-    ticker = "MTRS.ST"  # Adjust ticker if needed
+    ticker = "RDNT" # Adjust ticker if needed
     analysis = get_stock_rating(ticker)
     print(analysis)
 
