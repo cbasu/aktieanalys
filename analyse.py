@@ -8,10 +8,17 @@ import rlcompleter
 from stockutils import utils
 from tabulate import tabulate
 import re
+import contextlib
+import io
 
 begin = "2021-01-01"
 today = datetime.today().date()
 
+# Temporarily suppress stderr (where yfinance prints its download failure messages)
+@contextlib.contextmanager
+def suppress_stderr():
+    with contextlib.redirect_stderr(io.StringIO()):
+        yield
 
 exchange = {}
 
@@ -76,8 +83,18 @@ if user_input == "y":
                 date_object = date_object + timedelta(days=1)
                 start = date_object.strftime("%Y-%m-%d")
             
-            # Fetch historical stock data
-            df = yf.download(nam, start=start, end=end, auto_adjust=False)
+            with suppress_stderr():
+                try:
+                    # Fetch historical stock data
+                    df = yf.download(nam, start=start, end=end, auto_adjust=False,progress=False)
+                    if len(df.index) == 0:
+                        print(f"No data for {nam} between {start} and {end}.")
+                    else:
+                        print(f"Downloading {nam} between {start} and {end}.")
+                except Exception as e:
+                    print(f"Download failed: {e}")
+
+
             d = utils.append_yf2d(df, d)
         
             utils.analyse(stock, 60, d)

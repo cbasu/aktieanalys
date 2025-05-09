@@ -8,6 +8,9 @@ import sys
 import json
 import re
 from sklearn.linear_model import LinearRegression
+from datetime import datetime
+import pandas as pd
+from typing import Dict, Any
 
 # Define a function to suppress stdout
 class SuppressOutput:
@@ -23,115 +26,132 @@ class SuppressOutput:
         sys.stdout = self._original_stdout
         sys.stderr = self._original_stderr
 
+import json
+import logging
 
-def rd_d(f):
+def rd_d(file_path):
+    """
+    Read a JSON file and return its contents as a dictionary.
+
+    Args:
+    file_path (str): The path to the JSON file.
+
+    Returns:
+    dict: The contents of the JSON file as a dictionary.
+          Returns an empty dictionary if the file is not found or is invalid.
+    """
     try:
-    # Read the JSON file into a dictionary
-        with open(f, 'r') as json_file:
-            d = json.load(json_file)
-    except:
-        d = {}
-
-    return d
-
-def group_contiguous_elements(lst):
-    if not lst:
-        return []
-
-    list2d = []
-    current_group = [lst[0]]
-
-    for i in range(1, len(lst)):
-        if lst[i] == lst[i - 1] + 1:
-            current_group.append(lst[i])
-        else:
-            list2d.append(current_group)
-            current_group = [lst[i]]
+        with open(file_path, 'r') as json_file:
+            return json.load(json_file)
+    except FileNotFoundError:
+        logging.warning(f"File not found: {file_path}")
+    except json.JSONDecodeError:
+        logging.error(f"Invalid JSON in file: {file_path}")
+    except IOError as e:
+        logging.error(f"I/O error({e.errno}): {e.strerror}")
+    except Exception as e:
+        logging.error(f"Unexpected error reading {file_path}: {str(e)}")
     
-    list2d.append(current_group)  # Append the last group
+    return {}
 
-    return list2d
+#def group_contiguous_elements(lst):
+#    if not lst:
+#        return []
+#
+#    list2d = []
+#    current_group = [lst[0]]
+#
+#    for i in range(1, len(lst)):
+#        if lst[i] == lst[i - 1] + 1:
+#            current_group.append(lst[i])
+#        else:
+#            list2d.append(current_group)
+#            current_group = [lst[i]]
+#    
+#    list2d.append(current_group)  # Append the last group
+#
+#    return list2d
 
-def merge_ranges(xi, xr):
-
-    merge_list = [False] * len(xi)
-    for i in range(1, len(xi)):
-        first = xi[i][0]
-        prevlast = xi[i-1][len(xi[i-1])-1]
-        for j in range(len(xr)):
-            if prevlast < xr[j][0] < first:
-                merge_list[i] = False
-                break
-            else:
-                merge_list[i] = True
-    
-    lst = []
-    sublst = [0]
-    for i in range(1, len(merge_list)):
-        if merge_list[i]:
-            sublst.append(i)
-        else:
-            lst.append(sublst)
-            sublst = [i]
-    lst.append(sublst)
-
-    merged_xi = []
-    for sublist in lst:
-        subx = []
-        for i in sublist:
-            subx += xi[i]
-        merged_xi.append(subx)
-    return merged_xi
-
-def scan_data(data):
-    DAYS=60
-    ld = len(data["Date"])
-    x = data["Date"][DAYS-1:ld] 
-    y = data["Slope60"]
-    ymax = max(y)
-    ymin = min(y)
-    
-    # Calculate the range of the dataset
-    data_range = ymax - ymin
-    
-    # Calculate the threshold based on the percentage of the range
-    threshold = (5 / 100.0) * data_range   ## 2%
-    xmin_i = []
-    xmax_i = []
-    for i in range(len(x)):
-        valm = abs(y[i] - ymin)
-        valM = abs(y[i] - ymax)
-        #print(valm, valM, threshold)
-        if valm <= threshold:
-            xmin_i.append(i) 
-
-        if valM <= threshold:
-            xmax_i.append(i) 
-
-    xmin_i = group_contiguous_elements(xmin_i)
-    xmax_i = group_contiguous_elements(xmax_i)
-
-    xmin_i = merge_ranges(xmin_i, xmax_i)
-    xmax_i = merge_ranges(xmax_i, xmin_i)
-    
-    for indices in xmin_i:
-        v = 0
-        timestamp = 0
-        for ind in indices:
-            v += data["Adj Close"][ind+DAYS-1] 
-            date = datetime.strptime(data["Date"][ind+DAYS-1], "%Y-%m-%d")
-            timestamp += date.timestamp()
-
-        v = v / len(indices)
-        timestamp = timestamp / len(indices)
-        date = datetime.fromtimestamp(timestamp)
-        date = date.strftime("%Y-%m-%d")
-        print (x[indices[0]], x[indices[len(indices)-1]], v, date)
-    
-    print("MAX")
-    for xxx in xmax_i:
-        print (xxx[0], xxx[len(xxx)-1], x[xxx[0]], x[xxx[len(xxx)-1]])
-  
+#def merge_ranges(xi, xr):
+#
+#    merge_list = [False] * len(xi)
+#    for i in range(1, len(xi)):
+#        first = xi[i][0]
+#        prevlast = xi[i-1][len(xi[i-1])-1]
+#        for j in range(len(xr)):
+#            if prevlast < xr[j][0] < first:
+#                merge_list[i] = False
+#                break
+#            else:
+#                merge_list[i] = True
+#    
+#    lst = []
+#    sublst = [0]
+#    for i in range(1, len(merge_list)):
+#        if merge_list[i]:
+#            sublst.append(i)
+#        else:
+#            lst.append(sublst)
+#            sublst = [i]
+#    lst.append(sublst)
+#
+#    merged_xi = []
+#    for sublist in lst:
+#        subx = []
+#        for i in sublist:
+#            subx += xi[i]
+#        merged_xi.append(subx)
+#    return merged_xi
+#
+#def scan_data(data):
+#    DAYS=60
+#    ld = len(data["Date"])
+#    x = data["Date"][DAYS-1:ld] 
+#    y = data["Slope60"]
+#    ymax = max(y)
+#    ymin = min(y)
+#    
+#    # Calculate the range of the dataset
+#    data_range = ymax - ymin
+#    
+#    # Calculate the threshold based on the percentage of the range
+#    threshold = (5 / 100.0) * data_range   ## 2%
+#    xmin_i = []
+#    xmax_i = []
+#    for i in range(len(x)):
+#        valm = abs(y[i] - ymin)
+#        valM = abs(y[i] - ymax)
+#        #print(valm, valM, threshold)
+#        if valm <= threshold:
+#            xmin_i.append(i) 
+#
+#        if valM <= threshold:
+#            xmax_i.append(i) 
+#
+#    xmin_i = group_contiguous_elements(xmin_i)
+#    xmax_i = group_contiguous_elements(xmax_i)
+#
+#    xmin_i = merge_ranges(xmin_i, xmax_i)
+#    xmax_i = merge_ranges(xmax_i, xmin_i)
+#    
+#    for indices in xmin_i:
+#        v = 0
+#        timestamp = 0
+#        for ind in indices:
+#            v += data["Adj Close"][ind+DAYS-1] 
+#            date = datetime.strptime(data["Date"][ind+DAYS-1], "%Y-%m-%d")
+#            timestamp += date.timestamp()
+#
+#        v = v / len(indices)
+#        timestamp = timestamp / len(indices)
+#        date = datetime.fromtimestamp(timestamp)
+#        date = date.strftime("%Y-%m-%d")
+#        print (x[indices[0]], x[indices[len(indices)-1]], v, date)
+#    
+#    print("MAX")
+#    for xxx in xmax_i:
+#        print (xxx[0], xxx[len(xxx)-1], x[xxx[0]], x[xxx[len(xxx)-1]])
+#  
 
     
 
@@ -201,31 +221,32 @@ def append_yf2d(df, d):
 
     return d
 
-def append_df2d(df, d):
-    ld = datetime.strptime("2000-01-01", "%Y-%m-%d")
-    if not d:
-        d = df.to_dict(orient='list')
-        return d
 
-    nd = {}
-    l = len(d["Date"])
-    ldate = datetime.strptime(d["Date"][l-1], "%Y-%m-%d")
-    start_ind = len(df["Date"])
-
-    for i,dt in enumerate(df["Date"]):
-        dt = datetime.strptime(dt, "%Y-%m-%d")
-        if dt > ldate:
-            start_ind = i
-            break
-    
-    if start_ind >= len(df["Date"]):
-        return d
-    
-    for col in df.columns:
-        nd[col] = df[col].iloc[start_ind:].tolist()
-    for key in nd:
-        d[key] += nd[key]
-    return d
+#def append_df2d(df, d):
+#    ld = datetime.strptime("2000-01-01", "%Y-%m-%d")
+#    if not d:
+#        d = df.to_dict(orient='list')
+#        return d
+#
+#    nd = {}
+#    l = len(d["Date"])
+#    ldate = datetime.strptime(d["Date"][l-1], "%Y-%m-%d")
+#    start_ind = len(df["Date"])
+#
+#    for i,dt in enumerate(df["Date"]):
+#        dt = datetime.strptime(dt, "%Y-%m-%d")
+#        if dt > ldate:
+#            start_ind = i
+#            break
+#    
+#    if start_ind >= len(df["Date"]):
+#        return d
+#    
+#    for col in df.columns:
+#        nd[col] = df[col].iloc[start_ind:].tolist()
+#    for key in nd:
+#        d[key] += nd[key]
+#    return d
 
 def analyse(name, days, d):
     if days == 60:
