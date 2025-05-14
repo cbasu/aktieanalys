@@ -436,7 +436,8 @@ Total Rating: {final_score}/10
 
 # Example call
 if __name__ == "__main__":
-    ticker = "RDNT" # Adjust ticker if needed
+    #ticker = "RDNT" # Adjust ticker if needed
+    ticker = "COLO-B.CO" # Adjust ticker if needed
     analysis = get_stock_rating(ticker)
     print(analysis)
 
