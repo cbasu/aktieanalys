@@ -2,6 +2,7 @@
 #####################!/usr/bin/python3
 import json
 from datetime import datetime, timedelta
+import time
 import yfinance as yf
 import readline
 import rlcompleter
@@ -58,8 +59,10 @@ user_input = input("Run analysis (y/n): ")
 if user_input == "y":
     
     #for stock in tickers:
+    min_interval = 5  # seconds between calls
     for key in exchange:
         tickers = exchange[key]["symbol"]
+        last_call = 0
         for stock in tickers:
             start = begin
             end = today
@@ -77,7 +80,14 @@ if user_input == "y":
                 start = date_object.strftime("%Y-%m-%d")
             
             # Fetch historical stock data
+            now = time.time()
+            elapsed = now - last_call
+            if elapsed < min_interval:
+                time.sleep(min_interval - elapsed)
             df = yf.download(nam, start=start, end=end, auto_adjust=False)
+            # Update last_call timestamp
+            last_call = time.time()
+            
             d = utils.append_yf2d(df, d)
         
             utils.analyse(stock, 60, d)
