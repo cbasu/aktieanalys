@@ -1,3 +1,5 @@
+### line starting with # and empty lines will be ignored ###
+
 CO COLO-B [Coloplast]
 CO DANSKE [Danske Bank]
 CO DEMANT [Demant]
