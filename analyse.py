@@ -102,23 +102,27 @@ if user_input == "y":
                 json.dump(d, json_file, indent=4)
 
 table = []
-#for stock in tickers:
+
 for key in exchange:
     tickers = exchange[key]["symbol"] 
     for i, stock in enumerate(tickers):
         sname = exchange[key]["name"][i][0]
-        nam = stock+"."+key
+        nam = stock + "." + key
         fname = "yfdata/" + nam + ".json"
         d = utils.rd_d(fname)
+
         reco = utils.is_close_to_max_min(d["Slope60"])
         if reco == "neutral":
             continue
-        table.append([sname, reco])
 
-# Sort data by the 2nd column (index 1)
+        label = f"{sname} [{nam}]"
+        table.append([label, reco])
+
+# Sort by recommendation
 table = sorted(table, key=lambda x: x[1])
+
 headers = ["Name", "Rec60"]
-# Print the data in tabular format
+
 print(tabulate(table, headers=headers, tablefmt="plain"))
 
 commands=["exit"]
