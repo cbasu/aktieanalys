@@ -9,6 +9,8 @@ import rlcompleter
 from stockutils import utils
 from tabulate import tabulate
 import re
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import FuzzyWordCompleter, DynamicCompleter
 
 begin = "2021-01-01"
 today = datetime.today().date()
@@ -125,6 +127,7 @@ headers = ["Name", "Rec60"]
 
 print(tabulate(table, headers=headers, tablefmt="plain"))
 
+
 commands = ["exit"]
 
 for key in exchange:
@@ -137,25 +140,22 @@ for key in exchange:
         label = f"{sname} [{nam}]"
         commands.append(label)
 
-#commands=["exit"]
-##for name in tickers:
-#for key in exchange:
-#    tickers = exchange[key]["symbol"] 
-#    for stock in tickers:
-#        nam = stock+"."+key
-#        commands.append(nam)
+# Fuzzy completer
+#completer = FuzzyWordCompleter(commands)
+#completer = DynamicCompleter(lambda: FuzzyWordCompleter(commands))
+base_completer = FuzzyWordCompleter(commands)
+completer = DynamicCompleter(lambda: base_completer)
 
-# Configure readline to use the completer function
-readline.set_completer(completer)
-# Use tab for completion
-readline.parse_and_bind("tab: complete")
-
-# Simple loop to take user input
 while True:
-    user_input = input("Enter: ")
-    if user_input == 'exit':
+    user_input = prompt(
+        "Enter: ",
+        completer=completer,
+        complete_while_typing=True
+    )
+
+    if user_input == "exit":
         break
-    
+
     if "[" in user_input and "]" in user_input:
         user_input = user_input.split("[")[-1].rstrip("]")
     else:
