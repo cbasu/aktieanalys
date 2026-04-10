@@ -36,7 +36,7 @@ with open('list.txt', 'r') as file:
         line = re.sub(r',\s+', ',', line)
         
         # Skip empty lines
-        if not line:
+        if not line or line.startswith('#'):
             continue
         
         # Split the line into parts
