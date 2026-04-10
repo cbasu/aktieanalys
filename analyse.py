@@ -125,13 +125,25 @@ headers = ["Name", "Rec60"]
 
 print(tabulate(table, headers=headers, tablefmt="plain"))
 
-commands=["exit"]
-#for name in tickers:
+commands = ["exit"]
+
 for key in exchange:
-    tickers = exchange[key]["symbol"] 
-    for stock in tickers:
-        nam = stock+"."+key
-        commands.append(nam)
+    tickers = exchange[key]["symbol"]
+    names = exchange[key]["name"]
+
+    for i, stock in enumerate(tickers):
+        nam = stock + "." + key
+        sname = names[i][0]
+        label = f"{sname} [{nam}]"
+        commands.append(label)
+
+#commands=["exit"]
+##for name in tickers:
+#for key in exchange:
+#    tickers = exchange[key]["symbol"] 
+#    for stock in tickers:
+#        nam = stock+"."+key
+#        commands.append(nam)
 
 # Configure readline to use the completer function
 readline.set_completer(completer)
@@ -143,6 +155,12 @@ while True:
     user_input = input("Enter: ")
     if user_input == 'exit':
         break
+    
+    if "[" in user_input and "]" in user_input:
+        user_input = user_input.split("[")[-1].rstrip("]")
+    else:
+        user_input = user_input  # fallback if user types directly
+
     try:
         inp = user_input.split('.')[0]
         key = user_input.split('.')[1]
