@@ -9,6 +9,8 @@ import rlcompleter
 from stockutils import utils
 from tabulate import tabulate
 import re
+import os
+import contextlib
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import FuzzyWordCompleter, DynamicCompleter
 
@@ -86,7 +88,13 @@ if user_input == "y":
             elapsed = now - last_call
             if elapsed < min_interval:
                 time.sleep(min_interval - elapsed)
-            df = yf.download(nam, start=start, end=end, auto_adjust=False)
+            #df = yf.download(nam, start=start, end=end, auto_adjust=False, progress=False)
+            with open(os.devnull, 'w') as f, contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+                df = yf.download(nam, start=start, end=end, auto_adjust=False, progress=False)
+            if df.empty:
+                print(f"No data found for {nam} between {start} - {end}")
+            else:
+                print(f"Downloaded data for {nam} between {start} - {end}")
             # Update last_call timestamp
             last_call = time.time()
             
