@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 import time
 import yfinance as yf
 import readline
-import rlcompleter
 from stockutils import utils
 from tabulate import tabulate
 import re
@@ -19,14 +18,6 @@ today = datetime.today().date()
 
 
 exchange = {}
-
-# This function will be called to complete the input
-def completer(text, state):
-    options = [i for i in commands if i.startswith(text)]
-    if state < len(options):
-        return options[state]
-    else:
-        return None
 
 # Open the list and read line by line
 with open('list.txt', 'r') as file:
@@ -88,7 +79,7 @@ if user_input == "y":
             elapsed = now - last_call
             if elapsed < min_interval:
                 time.sleep(min_interval - elapsed)
-            #df = yf.download(nam, start=start, end=end, auto_adjust=False, progress=False)
+            ## supress stderr from yf
             with open(os.devnull, 'w') as f, contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
                 df = yf.download(nam, start=start, end=end, auto_adjust=False, progress=False)
             if df.empty:
@@ -122,8 +113,8 @@ for key in exchange:
         d = utils.rd_d(fname)
 
         reco = utils.is_close_to_max_min(d["Slope60"])
-        if reco == "neutral":
-            continue
+        #if reco == "neutral":
+        #    continue
 
         label = f"{sname} [{nam}]"
         table.append([label, reco])
@@ -133,58 +124,32 @@ table = sorted(table, key=lambda x: x[1])
 
 headers = ["Name", "Rec60"]
 
-print(tabulate(table, headers=headers, tablefmt="plain"))
+#print(tabulate(table, headers=headers, tablefmt="plain"))
 
+lines = [f"{Name} [{Rec60}]" for Name, Rec60 in table]
+lines.append("exit")
 
-commands = ["exit"]
-
-for key in exchange:
-    tickers = exchange[key]["symbol"]
-    names = exchange[key]["name"]
-
-    for i, stock in enumerate(tickers):
-        nam = stock + "." + key
-        sname = names[i][0]
-        label = f"{sname} [{nam}]"
-        commands.append(label)
-
-# Fuzzy completer
-#completer = FuzzyWordCompleter(commands)
-#completer = DynamicCompleter(lambda: FuzzyWordCompleter(commands))
-base_completer = FuzzyWordCompleter(commands)
-completer = DynamicCompleter(lambda: base_completer)
+completer = FuzzyWordCompleter(lines, WORD=True)
 
 while True:
     user_input = prompt(
-        "Enter: ",
+        "Search: ",
         completer=completer,
         complete_while_typing=True
     )
 
     if user_input == "exit":
         break
-
-    if "[" in user_input and "]" in user_input:
-        user_input = user_input.split("[")[-1].rstrip("]")
-    else:
-        user_input = user_input  # fallback if user types directly
-
-    try:
-        inp = user_input.split('.')[0]
-        key = user_input.split('.')[1]
-        
-        tickers = exchange[key]["symbol"] 
-
-        if inp in tickers:
-            i = tickers.index(inp)
-            print(exchange[key]["name"][i][0])
-            fname = "yfdata/" + user_input + ".json"
-            d = utils.rd_d(fname)
-            #utils.scan_data(d)
-            utils.plot(user_input, d)
-    except Exception as e:
-    # Print the error message
-        print(f"An error occurred: {e}")
-    #except:
-    #    print("Name does not exist: ", user_input)
+    parts = user_input.split("[")
+    tic = parts[1].split("]")[0]
+    inp = tic.split('.')[0]
+    key = tic.split('.')[1]
+    tickers= exchange[key]["symbol"] 
+    if inp in tickers:
+        i = tickers.index(inp)
+        #print(exchange[key]["name"][i][0])
+        fname = "yfdata/" + tic + ".json"
+        d = utils.rd_d(fname)
+        #utils.scan_data(d)
+        utils.plot(tic, d)
 
