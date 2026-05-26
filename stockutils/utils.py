@@ -9,6 +9,69 @@ import json
 import re
 from sklearn.linear_model import LinearRegression
 
+#try to use this function for better trend reversal detection
+def trend_break_hold_duration(
+    y,
+    window=50,
+    min_depth=0.02,
+    min_drop=0.0,
+    min_rise=0.0
+):
+    """
+    Detect trend breaks and compute how many days each break holds.
+    """
+
+    import numpy as np
+
+    y = np.asarray(y)
+    results = []
+
+    i = window + 2
+
+    while i < len(y) - 1:
+
+        # --- 1. detect trend break ---
+        dy_prev = y[i-1] - y[i-2]
+        dy_curr = y[i] - y[i-1]
+
+        if not (dy_prev < 0 and dy_curr > 0):
+            i += 1
+            continue
+
+        drop = y[i-2] - y[i-1]
+        rise = y[i] - y[i-1]
+
+        if drop < min_drop or rise < min_rise:
+            i += 1
+            continue
+
+        recent_max = np.max(y[i-window:i])
+        depth = recent_max - y[i-1]
+
+        if depth < min_depth:
+            i += 1
+            continue
+
+        # --- 2. measure hold duration ---
+        level = y[i-1]
+        j = i + 1
+
+        while j < len(y) and y[j] >= level:
+            j += 1
+
+        hold_days = j - i
+
+        results.append({
+            "index": i,
+            "value": y[i],
+            "hold_days": hold_days,
+            "depth": depth
+        })
+
+        i = j  # skip forward (avoid overlapping signals)
+
+    return results
+
 # Define a function to suppress stdout
 class SuppressOutput:
     def __enter__(self):

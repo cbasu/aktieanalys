@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-#####################!/usr/bin/python3
 import json
 from datetime import datetime, timedelta
 import time
 import yfinance as yf
-import readline
+#import readline
 from stockutils import utils
 from tabulate import tabulate
 import re
@@ -54,7 +53,7 @@ user_input = input("Run analysis (y/n): ")
 if user_input == "y":
     
     #for stock in tickers:
-    min_interval = 5  # seconds between calls
+    min_interval = 2  # seconds between calls
     for key in exchange:
         tickers = exchange[key]["symbol"]
         last_call = 0
@@ -77,8 +76,8 @@ if user_input == "y":
             # Fetch historical stock data
             now = time.time()
             elapsed = now - last_call
-            if elapsed < min_interval:
-                time.sleep(min_interval - elapsed)
+            time.sleep(max(0, min_interval - elapsed))
+
             ## supress stderr from yf
             with open(os.devnull, 'w') as f, contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
                 df = yf.download(nam, start=start, end=end, auto_adjust=False, progress=False)
@@ -147,7 +146,6 @@ while True:
     tickers= exchange[key]["symbol"] 
     if inp in tickers:
         i = tickers.index(inp)
-        #print(exchange[key]["name"][i][0])
         fname = "yfdata/" + tic + ".json"
         d = utils.rd_d(fname)
         #utils.scan_data(d)
