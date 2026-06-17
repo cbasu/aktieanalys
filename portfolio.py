@@ -18,6 +18,12 @@ def read_transactions(file_path):
         file_path, sep=";", encoding="utf-8-sig", decimal=",", thousands=" ", parse_dates=["Datum"]
     )
     df.columns = df.columns.str.strip()
+    
+    # --- ADD THIS LINE TO FIX THE SPACES ---
+    if "Värdepapper/beskrivning" in df.columns:
+        df["Värdepapper/beskrivning"] = df["Värdepapper/beskrivning"].astype(str).str.strip()
+    # ----------------------------------------
+    
     numeric_columns = ["Antal", "Kurs", "Belopp", "Courtage", "Valutakurs", "Resultat"]
     for col in numeric_columns:
         if col in df.columns:
@@ -92,7 +98,6 @@ if os.path.exists(list_file):
         for line in f:
             line = line.strip()
             if not line: continue
-            #match = re.match(r"^([A-Z]{2})\s+([^\s]+)\s+\[(.*)\]$", line)
             match = re.match(r"^([A-Z]{1,2})\s+([^\s]+)\s+\[(.*)\]$", line)
             if not match: continue
             market, symbol, aliases = match.group(1), match.group(2), match.group(3)
@@ -112,11 +117,8 @@ def get_live_stock_price(yahoo_symbol):
     try:
         ticker = yf.Ticker(yahoo_symbol)
         price = ticker.fast_info.get("lastPrice")
-        
-        # Adjust for London Stock Exchange quirk (Pence to Pounds)
         if price is not None and str(yahoo_symbol).upper().endswith(".L"):
             price = price / 100.0
-            
         return price
     except:
         return None
@@ -134,17 +136,28 @@ def get_live_exchange_rate(from_currency, to_currency="SEK"):
         pass
     return 1.0
 
+def fetch_weekly_historical_prices(yahoo_symbol, start_date):
+    try:
+        ticker = yf.Ticker(yahoo_symbol)
+        hist = ticker.history(start=start_date, interval="1wk")
+        if hist.empty:
+            return None
+        hist.index = hist.index.tz_localize(None)
+        if str(yahoo_symbol).upper().endswith(".L"):
+            hist["Close"] = hist["Close"] / 100.0
+        return hist["Close"]
+    except:
+        return None
+
 # =========================================================
-# BUILD PORTFOLIO ENGINE
+# BUILD PORTFOLIO ENGINE (MOVING METHOD MODEL)
 # =========================================================
 portfolio_df_input = combined_df[combined_df["Typ av transaktion"].str.lower().isin(["köp", "sälj"])]
 portfolio = {}
 
 for _, row in portfolio_df_input.iterrows():
     stock = row["Värdepapper/beskrivning"]
-    
-    if pd.isna(stock): continue
-    if str(stock).strip().lower() in exclude_stocks:
+    if pd.isna(stock) or str(stock).strip().lower() in exclude_stocks:
         continue
 
     transaction_type = str(row["Typ av transaktion"]).lower()
@@ -156,27 +169,47 @@ for _, row in portfolio_df_input.iterrows():
     currency = "SEK" if pd.isna(row["Instrumentvaluta"]) else row["Instrumentvaluta"]
 
     if stock not in portfolio:
-        portfolio[stock] = {"lots": [], "sell_value": 0.0, "buy_value_total": 0.0, "buy_shares_total": 0.0, "currency": currency}
+        portfolio[stock] = {
+            "V": 0.0, "D": 0.0, "N": 0.0, "B": 0.0, "B_local": 0.0,
+            "sell_value": 0.0, "buy_value_total": 0.0, "buy_shares_total": 0.0,
+            "currency": currency
+        }
     
     p = portfolio[stock]
-    execution_total = ((abs(qty) * kurs * valutakurs + abs(courtage)) / valutakurs)
+    execution_total = ((abs(qty) * float(kurs) * valutakurs + abs(courtage)) / valutakurs)
     execution_price_per_share = execution_total / abs(qty) if qty != 0 else 0
+    cost_per_share_sek = belopp / abs(qty) if qty != 0 else 0
+
+    today = pd.Timestamp.now().normalize()
+    days_elapsed = (today - pd.to_datetime(row["Datum"]).normalize()).days
+    if days_elapsed <= 0: days_elapsed = 1
 
     if "köp" in transaction_type:
-        cost_per_share_sek = belopp / abs(qty) if qty != 0 else 0
-        p["lots"].append([abs(qty), execution_price_per_share, cost_per_share_sek])
+        nb = abs(qty)
+        bb = cost_per_share_sek
+        bb_local = execution_price_per_share
+        
+        N2, B2, B2_local, D2, V2 = p["N"], p["B"], p["B_local"], p["D"], p["V"]
+        
+        V3 = V2 + (nb * bb)
+        N3 = N2 + nb
+        B3 = ((B2 * N2) + (nb * bb)) / N3 if N3 > 0 else 0
+        B3_local = ((B2_local * N2) + (nb * bb_local)) / N3 if N3 > 0 else 0
+        D3 = ((B2 * N2 * D2) + (nb * bb * days_elapsed)) / V3 if V3 > 0 else 0.0
+            
+        p["V"], p["N"], p["B"], p["B_local"], p["D"] = V3, N3, B3, B3_local, D3
         p["buy_value_total"] += belopp
-        p["buy_shares_total"] += abs(qty)
+        p["buy_shares_total"] += nb
+        
     elif "sälj" in transaction_type:
-        sell_qty = abs(qty)
+        ns = abs(qty)
         p["sell_value"] += belopp
-        while sell_qty > 0 and p["lots"]:
-            if p["lots"][0][0] <= sell_qty:
-                sell_qty -= p["lots"][0][0]
-                p["lots"].pop(0)
-            else:
-                p["lots"][0][0] -= sell_qty
-                sell_qty = 0
+        N1, B1 = p["N"], p["B"]
+        if N1 > 0:
+            p["N"] = max(N1 - ns, 0.0)
+            p["V"] = p["N"] * B1
+        if p["N"] == 0.0:
+            p["V"], p["D"] = 0.0, 0.0
 
 # =========================================================
 # GENERATE OUTPUT DATA
@@ -185,20 +218,17 @@ current_rows = []
 closed_rows = []
 
 for stock, data in portfolio.items():
-    remaining_shares = sum(lot[0] for lot in data["lots"])
-    remaining_cost_local = sum(lot[0] * lot[1] for lot in data["lots"])
-    current_buy_value_sek = sum(lot[0] * lot[2] for lot in data["lots"])
-    avg_buy_current = remaining_cost_local / remaining_shares if remaining_shares > 0 else 0
-    avg_buy_total = data["buy_value_total"] / data["buy_shares_total"] if data["buy_shares_total"] > 0 else 0
+    remaining_shares = data["N"]
+    current_buy_value_sek = data["V"]
     sold_shares = data["buy_shares_total"] - remaining_shares
     avg_sell_price = data["sell_value"] / sold_shares if sold_shares > 0 else 0
+    avg_buy_total = data["buy_value_total"] / data["buy_shares_total"] if data["buy_shares_total"] > 0 else 0
 
     if remaining_shares > 0:
         yahoo_symbol = find_yahoo_symbol(stock)
         live_price = get_live_stock_price(yahoo_symbol)
 
         if live_price is None:
-            # Bug fix preserved: Text input handles typing trailing decimal zeros smoothly
             live_price_str = st.sidebar.text_input(f"Live Price for {stock}:", value="0.0")
             try:
                 live_price = float(live_price_str.replace(",", ".").strip())
@@ -207,18 +237,27 @@ for stock, data in portfolio.items():
                 live_price = None
 
         pct_increase = None
+        avg_years = None 
+        pct_incr_year = None  
         current_value_sek = None
         if live_price is not None:
             fx_rate = get_live_exchange_rate(data["currency"], "SEK")
             current_value_sek = remaining_shares * live_price * fx_rate
             if current_buy_value_sek > 0:
                 pct_increase = ((current_value_sek - current_buy_value_sek) / current_buy_value_sek) * 100
+                avg_years = data["D"] / 365.25
+                if pct_increase is not None and avg_years > 0:
+                    pct_incr_year = pct_increase / avg_years
 
         current_rows.append({
             "Stock": stock, "Currency": data["currency"], "Number": round(remaining_shares, 4),
-            "Average Buy": round(avg_buy_current, 2), "Current Price": round(live_price, 2) if live_price else None,
+            "Average Buy": round(data["B_local"], 2), "Current Price": round(live_price, 2) if live_price else None,
             "Current Value (SEK)": round(current_value_sek, 2) if current_value_sek else None,
-            "Buy Value (SEK)": round(current_buy_value_sek, 2), "% Increase": round(pct_increase, 2) if pct_increase else None
+            "Buy Value (SEK)": round(current_buy_value_sek, 2), 
+            "% Increase": round(pct_increase, 2) if pct_increase else None,
+            "Duration (m)": round(avg_years*12, 2) if avg_years is not None else None, 
+            "% Incr/Year": round(pct_incr_year, 2) if pct_incr_year is not None else 0.0,
+            "_yahoo_symbol": yahoo_symbol, "_raw_D": data["D"]
         })
     elif remaining_shares == 0 and sold_shares > 0:
         closed_rows.append({
@@ -230,40 +269,90 @@ for stock, data in portfolio.items():
 current_portfolio_df = pd.DataFrame(current_rows)
 closed_portfolio_df = pd.DataFrame(closed_rows)
 
-if not current_portfolio_df.empty:
-    current_portfolio_df = current_portfolio_df.sort_values(by="Stock")
-if not closed_portfolio_df.empty:
-    closed_portfolio_df = closed_portfolio_df.sort_values(by="Stock")
+# =========================================================
+# URL QUERY PARAMETER HANDLING
+# =========================================================
+query_params = st.query_params
+selected_stock_trend = query_params.get("view_trend", None)
+
+time_unit = st.sidebar.radio("Choose Chart X-Axis Unit:", ["Months from Duration Baseline", "Days from Duration Baseline"], horizontal=False, key="global_chart_time_unit")
+
+def render_historical_chart(stock_name):
+    st.markdown(f"### 📊 Historical % Increase Trend: **{stock_name}**")
+    matched_records = current_portfolio_df[current_portfolio_df["Stock"] == stock_name]
+    
+    if matched_records.empty:
+        st.error(f"Data error: No portfolio records found for {stock_name}.")
+        return
+
+    row_item = matched_records.iloc[0]
+    ysymb = row_item["_yahoo_symbol"]
+    buy_val = row_item["Buy Value (SEK)"]
+    num_shares = row_item["Number"]
+    days_duration = row_item["_raw_D"] # Use the raw days from portfolio engine
+
+    if not ysymb or buy_val <= 0 or num_shares <= 0:
+        st.warning("⚠️ Insufficient data to calculate historical % increase.")
+        return
+
+    cost_basis_per_share = buy_val / num_shares
+    
+    # Calculate the exact start date based on duration
+    start_date = pd.Timestamp.now() - pd.Timedelta(days=int(days_duration))
+
+    with st.spinner(f"Fetching historical data for {ysymb}..."):
+        # Fetch data starting from the acquisition date
+        hist = yf.Ticker(ysymb).history(start=start_date)
+
+    if hist.empty:
+        st.error(f"❌ No historical price data found since {start_date.date()}.")
+        return
+
+    fx_rate = get_live_exchange_rate(row_item["Currency"], "SEK")
+    
+    # Calculate Pct Increase
+    hist['Pct_Increase'] = (((hist['Close'] * fx_rate) - cost_basis_per_share) / cost_basis_per_share) * 100
+    
+    # Calculate "Days from Baseline" for the X-axis
+    hist['Days_From_Baseline'] = (hist.index.tz_localize(None) - start_date.normalize()).days
+    
+    # Set index to Days_From_Baseline for the x-axis
+    plot_df = hist.set_index('Days_From_Baseline')
+    
+    st.line_chart(plot_df['Pct_Increase'])
 
 # =========================================================
-# INTERACTIVE UI OUTPUT
+# FIXED TAB NAVIGATION STRUCTURE
 # =========================================================
 tab1, tab2 = st.tabs(["💼 Current Holdings", "🔒 Closed Trades"])
 
 with tab1:
+    if selected_stock_trend:
+        st.markdown("---")
+        render_historical_chart(selected_stock_trend)
+        if st.button("❌ Hide Chart Trend View", use_container_width=False):
+            st.query_params.clear()
+            st.rerun()
+        st.markdown("---")
+
     st.subheader("Your Active Positions")
     if not current_portfolio_df.empty:
-        
-        # RESTORED: Visually splitting filters side-by-side
         col1, col2 = st.columns(2)
         with col1:
             currencies = ["All"] + list(current_portfolio_df["Currency"].unique())
-            selected_curr = st.selectbox("Filter by Currency:", currencies, key="curr_filter")
+            selected_curr = st.selectbox("Filter table by Currency:", currencies, key="curr_filter")
         with col2:
-            # RESTORED: Multi-select stock search bar dependent on currency
             available_stocks = current_portfolio_df["Stock"].unique()
             if selected_curr != "All":
                 available_stocks = current_portfolio_df[current_portfolio_df["Currency"] == selected_curr]["Stock"].unique()
-            selected_stocks = st.multiselect("Search / Select Stocks (Leave empty for All):", sorted(available_stocks))
+            selected_stocks = st.multiselect("Search / Filter Table Stocks:", sorted(available_stocks))
         
-        # Apply filters step-by-step to the displayed DataFrame
         filtered_df = current_portfolio_df.copy()
         if selected_curr != "All":
             filtered_df = filtered_df[filtered_df["Currency"] == selected_curr]
         if selected_stocks:
             filtered_df = filtered_df[filtered_df["Stock"].isin(selected_stocks)]
             
-        # RESTORED: Portfolio summary calculated dynamically from filtered tables
         valid_prices_df = filtered_df.dropna(subset=["Current Value (SEK)"])
         total_buy_sek = valid_prices_df["Buy Value (SEK)"].sum()
         total_current_sek = valid_prices_df["Current Value (SEK)"].sum()
@@ -272,15 +361,53 @@ with tab1:
 
         st.markdown("### 📊 Portfolio Summary")
         m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-        
         m_col1.metric(label="Total Cost Basis (SEK)", value=f"{total_buy_sek:,.2f}".replace(",", " "))
         m_col2.metric(label="Total Current Value (SEK)", value=f"{total_current_sek:,.2f}".replace(",", " "))
         m_col3.metric(label="Total Gain / Loss (SEK)", value=f"{total_gain_sek:,.2f}".replace(",", " "), delta=f"{total_gain_sek:,.2f}".replace(",", " "))
         m_col4.metric(label="Total Return", value=f"{total_pct_gain:.2f}%", delta=f"{total_pct_gain:.2f}%")
         st.markdown("---")
-            
-        # Render the interactive on-screen data grid
-        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+
+        # 1. Clear up instructions - show only once
+        st.info("💡 Click the 📈 View icon in the 'Trend' column to generate the chart for that stock.")
+
+        # 1. Prepare data for the interactive editor
+        # We drop the internal columns immediately so they never reach the editor
+        display_df = filtered_df.drop(columns=['_yahoo_symbol', '_raw_D'], errors='ignore')
+
+        # 2. Add a helper column for the link (keeping it separate from the data)
+        display_df['Trend'] = display_df['Stock'].apply(lambda x: f"?view_trend={x}")
+        display_df['Trend_Label'] = "📈 View"
+
+        # 3. Render the interactive table
+        st.data_editor(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            disabled=True,
+            column_order=["Stock", "Currency", "Number", "Average Buy", "Current Price", "Current Value (SEK)", "Buy Value (SEK)", "% Increase", "Duration (m)", "% Incr/Year", "Trend"],
+            column_config={
+                "Stock": st.column_config.TextColumn("Stock"),
+                "Trend": st.column_config.LinkColumn(
+                    "Trend",
+                    help="Click to view growth trend chart",
+                    display_text="Trend_Label", # This displays the icon instead of the URL
+                ),
+                "Trend_Label": None, # Hide the helper label column
+                "% Increase": st.column_config.NumberColumn(
+                    "% Increase",
+                    format="%.2f%%"
+                ),
+                "% Incr/Year": st.column_config.NumberColumn(format="%.2f%%"),
+                "Average Buy": st.column_config.NumberColumn(format="%.2f"),
+                "Current Price": st.column_config.NumberColumn(format="%.2f"),
+                "Current Value (SEK)": st.column_config.NumberColumn(format="%.2f"),
+                "Buy Value (SEK)": st.column_config.NumberColumn(format="%.2f"),
+            },
+        )
+
+
+
+        
     else:
         st.write("No open positions.")
 
@@ -290,12 +417,12 @@ with tab2:
         col1_c, col2_c = st.columns(2)
         with col1_c:
             currencies_c = ["All"] + list(closed_portfolio_df["Currency"].unique())
-            selected_curr_c = st.selectbox("Filter by Currency:", currencies_c, key="curr_filter_closed")
+            selected_curr_c = st.selectbox("Filter closed by Currency:", currencies_c, key="curr_filter_closed")
         with col2_c:
             available_stocks_c = closed_portfolio_df["Stock"].unique()
             if selected_curr_c != "All":
                 available_stocks_c = closed_portfolio_df[closed_portfolio_df["Currency"] == selected_curr_c]["Stock"].unique()
-            selected_stocks_c = st.multiselect("Search / Select Stocks:", sorted(available_stocks_c), key="stock_filter_closed")
+            selected_stocks_c = st.multiselect("Search / Select Closed Stocks:", sorted(available_stocks_c), key="stock_filter_closed")
             
         filtered_closed_df = closed_portfolio_df.copy()
         if selected_curr_c != "All":
