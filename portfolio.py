@@ -327,32 +327,27 @@ def render_historical_chart(stock_name):
 tab1, tab2 = st.tabs(["💼 Current Holdings", "🔒 Closed Trades"])
 
 with tab1:
-    if selected_stock_trend:
-        st.markdown("---")
-        render_historical_chart(selected_stock_trend)
-        if st.button("❌ Hide Chart Trend View", use_container_width=False):
-            st.query_params.clear()
-            st.rerun()
-        st.markdown("---")
-
     st.subheader("Your Active Positions")
+    
     if not current_portfolio_df.empty:
-        col1, col2 = st.columns(2)
-        with col1:
-            currencies = ["All"] + list(current_portfolio_df["Currency"].unique())
-            selected_curr = st.selectbox("Filter table by Currency:", currencies, key="curr_filter")
-        with col2:
-            available_stocks = current_portfolio_df["Stock"].unique()
-            if selected_curr != "All":
-                available_stocks = current_portfolio_df[current_portfolio_df["Currency"] == selected_curr]["Stock"].unique()
-            selected_stocks = st.multiselect("Search / Filter Table Stocks:", sorted(available_stocks))
-        
+        # --- HEADER-STYLE FILTERS ---
+        all_stocks_list = sorted(current_portfolio_df["Stock"].unique())
+        curr_options = ["All"] + list(current_portfolio_df["Currency"].unique())
+
+        f_col1, f_col2 = st.columns([3, 1])
+        with f_col1:
+            stock_search = st.multiselect("🔍 Filter by Stock Name", all_stocks_list, key="filter_stock")
+        with f_col2:
+            curr_search = st.selectbox("💱 Currency", curr_options, key="filter_curr")
+
+        # --- APPLY FILTERS ---
         filtered_df = current_portfolio_df.copy()
-        if selected_curr != "All":
-            filtered_df = filtered_df[filtered_df["Currency"] == selected_curr]
-        if selected_stocks:
-            filtered_df = filtered_df[filtered_df["Stock"].isin(selected_stocks)]
+        if stock_search:
+            filtered_df = filtered_df[filtered_df["Stock"].isin(stock_search)]
+        if curr_search != "All":
+            filtered_df = filtered_df[filtered_df["Currency"] == curr_search]
             
+        # --- PORTFOLIO SUMMARY METRICS ---
         valid_prices_df = filtered_df.dropna(subset=["Current Value (SEK)"])
         total_buy_sek = valid_prices_df["Buy Value (SEK)"].sum()
         total_current_sek = valid_prices_df["Current Value (SEK)"].sum()
@@ -360,60 +355,65 @@ with tab1:
         total_pct_gain = (total_gain_sek / total_buy_sek * 100) if total_buy_sek > 0 else 0.0
 
         st.markdown("### 📊 Portfolio Summary")
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-        m_col1.metric(label="Total Cost Basis (SEK)", value=f"{total_buy_sek:,.2f}".replace(",", " "))
-        m_col2.metric(label="Total Current Value (SEK)", value=f"{total_current_sek:,.2f}".replace(",", " "))
-        m_col3.metric(label="Total Gain / Loss (SEK)", value=f"{total_gain_sek:,.2f}".replace(",", " "), delta=f"{total_gain_sek:,.2f}".replace(",", " "))
-        m_col4.metric(label="Total Return", value=f"{total_pct_gain:.2f}%", delta=f"{total_pct_gain:.2f}%")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Cost Basis (SEK)", f"{total_buy_sek:,.0f}".replace(",", " "))
+        m2.metric("Current Value (SEK)", f"{total_current_sek:,.0f}".replace(",", " "))
+        m3.metric("Gain/Loss (SEK)", f"{total_gain_sek:,.0f}".replace(",", " "), delta=f"{total_gain_sek:,.0f}".replace(",", " "))
+        m4.metric("Total Return", f"{total_pct_gain:.2f}%", delta=f"{total_pct_gain:.2f}%")
+        
         st.markdown("---")
 
-        # 1. Clear up instructions - show only once
-        st.info("💡 Click the 📈 View icon in the 'Trend' column to generate the chart for that stock.")
-
-        # 1. Prepare data for the interactive editor
-        # We drop the internal columns immediately so they never reach the editor
+        # --- RENDER TABLE ---
         display_df = filtered_df.drop(columns=['_yahoo_symbol', '_raw_D'], errors='ignore')
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-        # 2. Add a helper column for the link (keeping it separate from the data)
-        display_df['Trend'] = display_df['Stock'].apply(lambda x: f"?view_trend={x}")
-        display_df['Trend_Label'] = "📈 View"
-
-        # 3. Render the interactive table
-        st.data_editor(
-            display_df,
-            use_container_width=True,
-            hide_index=True,
-            disabled=True,
-            column_order=["Stock", "Currency", "Number", "Average Buy", "Current Price", "Current Value (SEK)", "Buy Value (SEK)", "% Increase", "Duration (m)", "% Incr/Year", "Trend"],
-            column_config={
-                "Stock": st.column_config.TextColumn("Stock"),
-                "Trend": st.column_config.LinkColumn(
-                    "Trend",
-                    help="Click to view growth trend chart",
-                    display_text="Trend_Label", # This displays the icon instead of the URL
-                ),
-                "Trend_Label": None, # Hide the helper label column
-                "% Increase": st.column_config.NumberColumn(
-                    "% Increase",
-                    format="%.2f%%"
-                ),
-                "% Incr/Year": st.column_config.NumberColumn(format="%.2f%%"),
-                "Average Buy": st.column_config.NumberColumn(format="%.2f"),
-                "Current Price": st.column_config.NumberColumn(format="%.2f"),
-                "Current Value (SEK)": st.column_config.NumberColumn(format="%.2f"),
-                "Buy Value (SEK)": st.column_config.NumberColumn(format="%.2f"),
-            },
+        # --- NAVIGATION (THE BOX) ---
+        st.markdown("### 📈 View Trend Chart")
+        
+        def update_view():
+            st.query_params["view_trend"] = st.session_state.trend_selector
+            
+        st.selectbox(
+            "Select a stock to view its trend:", 
+            [""] + list(display_df["Stock"].unique()),
+            key="trend_selector",
+            on_change=update_view
         )
 
-
-
-        
+        # --- CHART RENDERS BELOW THE BOX ---
+        if selected_stock_trend:
+            st.markdown("---")
+            render_historical_chart(selected_stock_trend)
+            if st.button("❌ Hide Chart Trend View", use_container_width=False):
+                st.query_params.clear()
+                st.rerun()
+            st.markdown("---")
     else:
         st.write("No open positions.")
+
 
 with tab2:
     st.subheader("Your Historical Closed Positions")
     if not closed_portfolio_df.empty:
+        # Calculate Realized Profit/Loss and % Gain
+        closed_portfolio_df["Realized Gain/Loss"] = closed_portfolio_df["Total Sell Value"] - closed_portfolio_df["Total Buy Value"]
+        closed_portfolio_df["% Realized Gain"] = (closed_portfolio_df["Realized Gain/Loss"] / closed_portfolio_df["Total Buy Value"]) * 100
+        
+        # --- CALCULATE SUMMARY ---
+        total_realized_gain = closed_portfolio_df["Realized Gain/Loss"].sum()
+        total_invested = closed_portfolio_df["Total Buy Value"].sum()
+        total_realized_pct = (total_realized_gain / total_invested * 100) if total_invested > 0 else 0.0
+
+        # --- DISPLAY SUMMARY ---
+        st.markdown("### 📊 Realized Summary")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Invested (SEK)", f"{total_invested:,.0f}".replace(",", " "))
+        m2.metric("Total Realized Gain/Loss (SEK)", f"{total_realized_gain:,.0f}".replace(",", " "), delta=f"{total_realized_gain:,.0f}".replace(",", " "))
+        m3.metric("Total Realized Return", f"{total_realized_pct:.2f}%", delta=f"{total_realized_pct:.2f}%")
+        
+        st.markdown("---")
+        
+        # --- FILTERS ---
         col1_c, col2_c = st.columns(2)
         with col1_c:
             currencies_c = ["All"] + list(closed_portfolio_df["Currency"].unique())
@@ -430,6 +430,16 @@ with tab2:
         if selected_stocks_c:
             filtered_closed_df = filtered_closed_df[filtered_closed_df["Stock"].isin(selected_stocks_c)]
             
-        st.dataframe(filtered_closed_df, use_container_width=True, hide_index=True)
+        # Display table with formatting
+        st.dataframe(
+            filtered_closed_df.style.format({
+                "Total Buy Value": "{:,.2f}",
+                "Total Sell Value": "{:,.2f}",
+                "Realized Gain/Loss": "{:,.2f}",
+                "% Realized Gain": "{:.2f}%"
+            }), 
+            use_container_width=True, 
+            hide_index=True
+        )
     else:
         st.write("No closed positions.")
