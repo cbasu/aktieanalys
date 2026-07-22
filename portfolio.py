@@ -1,5 +1,6 @@
 import os
 import re
+import glob
 import pandas as pd
 import yfinance as yf
 import streamlit as st
@@ -8,9 +9,8 @@ import streamlit as st
 st.set_page_config(layout="wide", page_title="Portfolio Tracker")
 st.title("📈 Portfolio Dashboard")
 
-# Input files
-csv_file = "txn.csv"
-output_file = "transactions_cleaned.csv"
+# Input configuration (reading year-wise files sequentially from 'txndata')
+txndata_folder = "txndata"  # Folder containing txn-xx.csv files
 exclude_file = "exclude.txt"  
 
 def read_transactions(file_path):
@@ -19,10 +19,8 @@ def read_transactions(file_path):
     )
     df.columns = df.columns.str.strip()
     
-    # --- ADD THIS LINE TO FIX THE SPACES ---
     if "Värdepapper/beskrivning" in df.columns:
         df["Värdepapper/beskrivning"] = df["Värdepapper/beskrivning"].astype(str).str.strip()
-    # ----------------------------------------
     
     numeric_columns = ["Antal", "Kurs", "Belopp", "Courtage", "Valutakurs", "Resultat"]
     for col in numeric_columns:
@@ -31,39 +29,28 @@ def read_transactions(file_path):
     return df
 
 # =========================================================
-# READ & MERGE DATABASE
+# READ & SEQUENTIALLY CONCATENATE YEAR-WISE DATA
 # =========================================================
-if os.path.exists(csv_file):
-    new_df = read_transactions(csv_file)
-    incoming_rows = len(new_df)
+all_dfs = []
+incoming_rows = 0
+
+if os.path.exists(txndata_folder):
+    # Find all transaction files matching txn-*.csv inside the folder
+    pattern = os.path.join(txndata_folder, "txn-*.csv")
+    txn_files = sorted(glob.glob(pattern))  # Sorted sequentially by filename (earliest year first)
+    
+    if txn_files:
+        for file_path in txn_files:
+            df_year = read_transactions(file_path)
+            incoming_rows += len(df_year)
+            all_dfs.append(df_year)
+        combined_df = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
+    else:
+        st.error(f"No transaction files matching 'txn-*.csv' found inside folder: {txndata_folder}")
+        st.stop()
 else:
-    st.error(f"Could not find input file: {csv_file}")
+    st.error(f"Could not find transaction data folder: {txndata_folder}")
     st.stop()
-
-if os.path.exists(output_file):
-    old_df = pd.read_csv(output_file, parse_dates=["Datum"])
-    old_rows = len(old_df)
-else:
-    old_df = pd.DataFrame()
-    old_rows = 0
-
-unique_columns = ["Datum", "Konto", "Typ av transaktion", "Värdepapper/beskrivning", "Antal", "Kurs", "Belopp", "ISIN"]
-
-if old_df.empty:
-    combined_df = new_df.copy()
-else:
-    for col in unique_columns:
-        if col not in old_df.columns: old_df[col] = ""
-        if col not in new_df.columns: new_df[col] = ""
-    old_keys = old_df[unique_columns].astype(str).agg("|".join, axis=1)
-    new_keys = new_df[unique_columns].astype(str).agg("|".join, axis=1)
-    old_key_set = set(old_keys)
-    mask_new = ~new_keys.isin(old_key_set)
-    new_only_df = new_df[mask_new]
-    combined_df = pd.concat([old_df, new_only_df], ignore_index=True)
-
-combined_df = combined_df.sort_values(by="Datum")
-combined_df.to_csv(output_file, index=False)
 
 # =========================================================
 # READ EXCLUSION LIST
@@ -84,9 +71,8 @@ if st.sidebar.button("♻️ Reload Live Prices", use_container_width=True):
 
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Database Sync Status")
-st.sidebar.write(f"Incoming rows: `{incoming_rows}`")
-st.sidebar.write(f"Existing stored rows: `{old_rows}`")
-st.sidebar.write(f"Total rows in database: `{len(combined_df)}`")
+st.sidebar.write(f"Total loaded rows: `{incoming_rows}`")
+st.sidebar.write(f"Total rows in processed frame: `{len(combined_df)}`")
 
 # =========================================================
 # STOCK SYMBOL MAPPING & UTILITIES (CACHED)
@@ -152,64 +138,44 @@ def fetch_weekly_historical_prices(yahoo_symbol, start_date):
 # =========================================================
 # BUILD PORTFOLIO ENGINE (MOVING METHOD MODEL)
 # =========================================================
-portfolio_df_input = combined_df[combined_df["Typ av transaktion"].str.lower().isin(["köp", "sälj"])]
-portfolio = {}
+portfolio_df_input = combined_df[combined_df["Typ av transaktion"].str.lower().isin(["köp", "sälj"])].sort_values("Datum")
+portfolio = {} 
+today = pd.Timestamp.now().normalize()
 
 for _, row in portfolio_df_input.iterrows():
     stock = row["Värdepapper/beskrivning"]
-    if pd.isna(stock) or str(stock).strip().lower() in exclude_stocks:
-        continue
+    if pd.isna(stock) or str(stock).strip().lower() in exclude_stocks: continue
 
     transaction_type = str(row["Typ av transaktion"]).lower()
-    qty = 0.0 if pd.isna(row["Antal"]) else float(row["Antal"])
-    kurs = 0.0 if pd.isna(row["Kurs"]) else float(row["Kurs"])
-    courtage = 0.0 if pd.isna(row["Courtage"]) else float(row["Courtage"])
-    belopp = 0.0 if pd.isna(row["Belopp"]) else abs(float(row["Belopp"]))
-    valutakurs = 1.0 if pd.isna(row["Valutakurs"]) or row["Valutakurs"] == 0 else float(row["Valutakurs"])
-    currency = "SEK" if pd.isna(row["Instrumentvaluta"]) else row["Instrumentvaluta"]
-
+    n = abs(float(row["Antal"])) if not pd.isna(row["Antal"]) else 0.0
+    b = float(row["Kurs"]) if not pd.isna(row["Kurs"]) else 0.0
+    d = pd.to_datetime(row["Datum"]).normalize()
+    t = max((today - d).days, 0)
+    
     if stock not in portfolio:
-        portfolio[stock] = {
-            "V": 0.0, "D": 0.0, "N": 0.0, "B": 0.0, "B_local": 0.0,
-            "sell_value": 0.0, "buy_value_total": 0.0, "buy_shares_total": 0.0,
-            "currency": currency
-        }
+        portfolio[stock] = {"N": 0.0, "W": 0.0, "T": 0.0, "B": 0.0, "BF": 0.0, "currency": row.get("Instrumentvaluta", "SEK")}
     
     p = portfolio[stock]
-    execution_total = ((abs(qty) * float(kurs) * valutakurs + abs(courtage)) / valutakurs)
-    execution_price_per_share = execution_total / abs(qty) if qty != 0 else 0
-    cost_per_share_sek = belopp / abs(qty) if qty != 0 else 0
-
-    today = pd.Timestamp.now().normalize()
-    days_elapsed = (today - pd.to_datetime(row["Datum"]).normalize()).days
-    if days_elapsed <= 0: days_elapsed = 1
 
     if "köp" in transaction_type:
-        nb = abs(qty)
-        bb = cost_per_share_sek
-        bb_local = execution_price_per_share
-        
-        N2, B2, B2_local, D2, V2 = p["N"], p["B"], p["B_local"], p["D"], p["V"]
-        
-        V3 = V2 + (nb * bb)
-        N3 = N2 + nb
-        B3 = ((B2 * N2) + (nb * bb)) / N3 if N3 > 0 else 0
-        B3_local = ((B2_local * N2) + (nb * bb_local)) / N3 if N3 > 0 else 0
-        D3 = ((B2 * N2 * D2) + (nb * bb * days_elapsed)) / V3 if V3 > 0 else 0.0
-            
-        p["V"], p["N"], p["B"], p["B_local"], p["D"] = V3, N3, B3, B3_local, D3
-        p["buy_value_total"] += belopp
-        p["buy_shares_total"] += nb
-        
+        # Get the historical exchange rate from the row, default to 1.0 if not found/NaN
+        fx_val = float(row["Valutakurs"]) if ("Valutakurs" in row and not pd.isna(row["Valutakurs"])) else 1.0
+
+        W_old, T_old, N_old = p["W"], p["T"], p["N"]
+        N_new = N_old + n
+
+        # Multiply by the exchange rate so W_new is stored in SEK
+        W_new = W_old + (n * b * fx_val)
+
+        T_new = ((W_old * T_old) + (n * b * t)) / W_new if W_new > 0 else t
+        B_new = W_new / N_new if N_new > 0 else 0
+        p["N"], p["W"], p["T"], p["B"] = N_new, W_new, T_new, B_new
     elif "sälj" in transaction_type:
-        ns = abs(qty)
-        p["sell_value"] += belopp
-        N1, B1 = p["N"], p["B"]
-        if N1 > 0:
-            p["N"] = max(N1 - ns, 0.0)
-            p["V"] = p["N"] * B1
-        if p["N"] == 0.0:
-            p["V"], p["D"] = 0.0, 0.0
+        p["BF"] += n * (b - p["B"])
+        p["W"] = p["W"] - (n * p["B"])
+        p["N"] = max(p["N"] - n, 0.0)
+        if p["N"] <= 0: p["W"], p["N"], p["T"], p["B"] = 0.0, 0.0, 0.0, 0.0
+
 
 # =========================================================
 # GENERATE OUTPUT DATA
@@ -219,15 +185,12 @@ closed_rows = []
 
 for stock, data in portfolio.items():
     remaining_shares = data["N"]
-    current_buy_value_sek = data["V"]
-    sold_shares = data["buy_shares_total"] - remaining_shares
-    avg_sell_price = data["sell_value"] / sold_shares if sold_shares > 0 else 0
-    avg_buy_total = data["buy_value_total"] / data["buy_shares_total"] if data["buy_shares_total"] > 0 else 0
-
+    
     if remaining_shares > 0:
         yahoo_symbol = find_yahoo_symbol(stock)
         live_price = get_live_stock_price(yahoo_symbol)
 
+        # Handle manual entry if live price is missing
         if live_price is None:
             live_price_str = st.sidebar.text_input(f"Live Price for {stock}:", value="0.0")
             try:
@@ -236,34 +199,44 @@ for stock, data in portfolio.items():
             except ValueError:
                 live_price = None
 
-        pct_increase = None
-        avg_years = None 
-        pct_incr_year = None  
         current_value_sek = None
+        pct_increase = None
+        pct_incr_year = 0.0  # Initialize variable
+        
         if live_price is not None:
             fx_rate = get_live_exchange_rate(data["currency"], "SEK")
             current_value_sek = remaining_shares * live_price * fx_rate
-            if current_buy_value_sek > 0:
-                pct_increase = ((current_value_sek - current_buy_value_sek) / current_buy_value_sek) * 100
-                avg_years = data["D"] / 365.25
-                if pct_increase is not None and avg_years > 0:
-                    pct_incr_year = pct_increase / avg_years
+            buy_val_sek = remaining_shares * data["B"]
+            
+            if buy_val_sek > 0:
+                pct_increase = ((current_value_sek - buy_val_sek) / buy_val_sek) * 100
+                years = data["T"] / 365.25
+                if years > 0:
+                    pct_incr_year = pct_increase / years
 
         current_rows.append({
-            "Stock": stock, "Currency": data["currency"], "Number": round(remaining_shares, 4),
-            "Average Buy": round(data["B_local"], 2), "Current Price": round(live_price, 2) if live_price else None,
-            "Current Value (SEK)": round(current_value_sek, 2) if current_value_sek else None,
-            "Buy Value (SEK)": round(current_buy_value_sek, 2), 
-            "% Increase": round(pct_increase, 2) if pct_increase else None,
-            "Duration (m)": round(avg_years*12, 2) if avg_years is not None else None, 
-            "% Incr/Year": round(pct_incr_year, 2) if pct_incr_year is not None else 0.0,
-            "_yahoo_symbol": yahoo_symbol, "_raw_D": data["D"]
+            "Stock": stock, 
+            "Currency": data["currency"], 
+            "Number": round(remaining_shares, 4),
+            "Average Buy": round(data["B"], 2), 
+            "Current Price": round(live_price, 2) if live_price else None,
+            "Current Value (SEK)": round(current_value_sek, 2) if current_value_sek is not None else None,
+            "Buy Value (SEK)": round(remaining_shares * data["B"], 2), 
+            "% Increase": round(pct_increase, 2) if pct_increase is not None else None,
+            "% Incr/Year": round(pct_incr_year, 2),
+            "Duration (m)": round(data["T"] / 30.44, 2), 
+            "_yahoo_symbol": yahoo_symbol, 
+            "_raw_D": data["T"]
         })
-    elif remaining_shares == 0 and sold_shares > 0:
+    
+    # Capture Realized Profit
+    if data["BF"] != 0:
         closed_rows.append({
-            "Stock": stock, "Currency": data["currency"], "Bought Shares": round(data["buy_shares_total"], 4),
-            "Sold Shares": round(sold_shares, 4), "Average Buy Total": round(avg_buy_total, 2),
-            "Average Sell Price": round(avg_sell_price, 2), "Total Buy Value": round(data["buy_value_total"], 2), "Total Sell Value": round(data["sell_value"], 2)
+            "Stock": stock, 
+            "Currency": data["currency"], 
+            "Total Buy Value": round(data["W"], 2), 
+            "Total Sell Value": round(data["W"] + data["BF"], 2), 
+            "Realized Gain/Loss": round(data["BF"], 2)
         })
 
 current_portfolio_df = pd.DataFrame(current_rows)
@@ -289,19 +262,16 @@ def render_historical_chart(stock_name):
     ysymb = row_item["_yahoo_symbol"]
     buy_val = row_item["Buy Value (SEK)"]
     num_shares = row_item["Number"]
-    days_duration = row_item["_raw_D"] # Use the raw days from portfolio engine
+    days_duration = row_item["_raw_D"]
 
     if not ysymb or buy_val <= 0 or num_shares <= 0:
         st.warning("⚠️ Insufficient data to calculate historical % increase.")
         return
 
     cost_basis_per_share = buy_val / num_shares
-    
-    # Calculate the exact start date based on duration
     start_date = pd.Timestamp.now() - pd.Timedelta(days=int(days_duration))
 
     with st.spinner(f"Fetching historical data for {ysymb}..."):
-        # Fetch data starting from the acquisition date
         hist = yf.Ticker(ysymb).history(start=start_date)
 
     if hist.empty:
@@ -310,15 +280,10 @@ def render_historical_chart(stock_name):
 
     fx_rate = get_live_exchange_rate(row_item["Currency"], "SEK")
     
-    # Calculate Pct Increase
     hist['Pct_Increase'] = (((hist['Close'] * fx_rate) - cost_basis_per_share) / cost_basis_per_share) * 100
-    
-    # Calculate "Days from Baseline" for the X-axis
     hist['Days_From_Baseline'] = (hist.index.tz_localize(None) - start_date.normalize()).days
     
-    # Set index to Days_From_Baseline for the x-axis
     plot_df = hist.set_index('Days_From_Baseline')
-    
     st.line_chart(plot_df['Pct_Increase'])
 
 # =========================================================
@@ -330,7 +295,6 @@ with tab1:
     st.subheader("Your Active Positions")
     
     if not current_portfolio_df.empty:
-        # --- HEADER-STYLE FILTERS ---
         all_stocks_list = sorted(current_portfolio_df["Stock"].unique())
         curr_options = ["All"] + list(current_portfolio_df["Currency"].unique())
 
@@ -340,14 +304,12 @@ with tab1:
         with f_col2:
             curr_search = st.selectbox("💱 Currency", curr_options, key="filter_curr")
 
-        # --- APPLY FILTERS ---
         filtered_df = current_portfolio_df.copy()
         if stock_search:
             filtered_df = filtered_df[filtered_df["Stock"].isin(stock_search)]
         if curr_search != "All":
             filtered_df = filtered_df[filtered_df["Currency"] == curr_search]
             
-        # --- PORTFOLIO SUMMARY METRICS ---
         valid_prices_df = filtered_df.dropna(subset=["Current Value (SEK)"])
         total_buy_sek = valid_prices_df["Buy Value (SEK)"].sum()
         total_current_sek = valid_prices_df["Current Value (SEK)"].sum()
@@ -363,11 +325,9 @@ with tab1:
         
         st.markdown("---")
 
-        # --- RENDER TABLE ---
         display_df = filtered_df.drop(columns=['_yahoo_symbol', '_raw_D'], errors='ignore')
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-        # --- NAVIGATION (THE BOX) ---
         st.markdown("### 📈 View Trend Chart")
         
         def update_view():
@@ -380,7 +340,6 @@ with tab1:
             on_change=update_view
         )
 
-        # --- CHART RENDERS BELOW THE BOX ---
         if selected_stock_trend:
             st.markdown("---")
             render_historical_chart(selected_stock_trend)
@@ -395,16 +354,13 @@ with tab1:
 with tab2:
     st.subheader("Your Historical Closed Positions")
     if not closed_portfolio_df.empty:
-        # Calculate Realized Profit/Loss and % Gain
         closed_portfolio_df["Realized Gain/Loss"] = closed_portfolio_df["Total Sell Value"] - closed_portfolio_df["Total Buy Value"]
         closed_portfolio_df["% Realized Gain"] = (closed_portfolio_df["Realized Gain/Loss"] / closed_portfolio_df["Total Buy Value"]) * 100
         
-        # --- CALCULATE SUMMARY ---
         total_realized_gain = closed_portfolio_df["Realized Gain/Loss"].sum()
         total_invested = closed_portfolio_df["Total Buy Value"].sum()
         total_realized_pct = (total_realized_gain / total_invested * 100) if total_invested > 0 else 0.0
 
-        # --- DISPLAY SUMMARY ---
         st.markdown("### 📊 Realized Summary")
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Invested (SEK)", f"{total_invested:,.0f}".replace(",", " "))
@@ -413,7 +369,6 @@ with tab2:
         
         st.markdown("---")
         
-        # --- FILTERS ---
         col1_c, col2_c = st.columns(2)
         with col1_c:
             currencies_c = ["All"] + list(closed_portfolio_df["Currency"].unique())
@@ -430,7 +385,6 @@ with tab2:
         if selected_stocks_c:
             filtered_closed_df = filtered_closed_df[filtered_closed_df["Stock"].isin(selected_stocks_c)]
             
-        # Display table with formatting
         st.dataframe(
             filtered_closed_df.style.format({
                 "Total Buy Value": "{:,.2f}",

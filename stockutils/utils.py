@@ -1,9 +1,10 @@
+import os
+os.environ["QT_QPA_PLATFORM"] = "xcb"
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
-import os
 import sys
 import json
 import re
@@ -403,16 +404,42 @@ def slope(start, end, fd):
     invst = diff * np.array(pd["Volume"])
     pd["Invest"] = list(itertools.accumulate(invst.tolist()))
     invst = np.array(pd["Invest"])
-    norm_invst = (invst - invst.mean()) / invst.std()
+#    norm_invst = (invst - invst.mean()) / invst.std()
+#    pd["Norm_invest"] = norm_invst.tolist()
+#    x = np.arange(start, end).reshape(-1, 1)  # Reshape for sklearn
+#    y = norm_invst
+#    # Create a linear regression model
+#    model = LinearRegression()
+#    # Fit the model
+#    model.fit(x, y)
+#    # Get the coefficients
+#    pd["Intercept"] = model.intercept_
+#    pd["Slope"] = model.coef_[0]
+#
+#    return pd
+
+    # Check if standard deviation is 0 to avoid division by zero (NaNs)
+    invst_std = invst.std()
+    if invst_std == 0 or np.isnan(invst_std):
+        norm_invst = np.zeros_like(invst, dtype=float)
+    else:
+        norm_invst = (invst - invst.mean()) / invst_std
+        
     pd["Norm_invest"] = norm_invst.tolist()
+    
     x = np.arange(start, end).reshape(-1, 1)  # Reshape for sklearn
     y = norm_invst
+    
     # Create a linear regression model
     model = LinearRegression()
     # Fit the model
-    model.fit(x, y)
+    model.fit(x, y)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
     # Get the coefficients
     pd["Intercept"] = model.intercept_
     pd["Slope"] = model.coef_[0]
 
     return pd
+
+
+
+

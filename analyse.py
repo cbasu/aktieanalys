@@ -3,7 +3,6 @@ import json
 from datetime import datetime, timedelta
 import time
 import yfinance as yf
-#import readline
 from stockutils import utils
 from tabulate import tabulate
 import re
