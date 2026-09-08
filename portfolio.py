@@ -138,7 +138,11 @@ def fetch_weekly_historical_prices(yahoo_symbol, start_date):
 # =========================================================
 # BUILD PORTFOLIO ENGINE (MOVING METHOD MODEL)
 # =========================================================
-portfolio_df_input = combined_df[combined_df["Typ av transaktion"].str.lower().isin(["köp", "sälj"])].sort_values("Datum")
+combined_df["Datum"] = pd.to_datetime(combined_df["Datum"], errors="coerce")
+portfolio_df_input = combined_df[
+    combined_df["Typ av transaktion"].str.lower().isin(["köp", "sälj"])
+].sort_values("Datum", ascending=True)
+
 portfolio = {} 
 today = pd.Timestamp.now().normalize()
 
@@ -148,9 +152,11 @@ for _, row in portfolio_df_input.iterrows():
 
     transaction_type = str(row["Typ av transaktion"]).lower()
     n = abs(float(row["Antal"])) if not pd.isna(row["Antal"]) else 0.0
-    b = float(row["Kurs"]) if not pd.isna(row["Kurs"]) else 0.0
+    b = float(row["Kurs"] ) if not pd.isna(row["Kurs"]) else 0.0
     d = pd.to_datetime(row["Datum"]).normalize()
-    t = max((today - d).days, 0)
+    
+    # Calculate age of this specific transaction relative to today (days elapsed since it occurred)
+    age_in_days = max((today - d).days, 0)
     
     if stock not in portfolio:
         portfolio[stock] = {"N": 0.0, "W": 0.0, "T": 0.0, "B": 0.0, "BF": 0.0, "currency": row.get("Instrumentvaluta", "SEK")}
@@ -158,23 +164,35 @@ for _, row in portfolio_df_input.iterrows():
     p = portfolio[stock]
 
     if "köp" in transaction_type:
-        # Get the historical exchange rate from the row, default to 1.0 if not found/NaN
         fx_val = float(row["Valutakurs"]) if ("Valutakurs" in row and not pd.isna(row["Valutakurs"])) else 1.0
 
         W_old, T_old, N_old = p["W"], p["T"], p["N"]
-        N_new = N_old + n
+        
+        # If position was completely closed, force a total hard reset of metrics
+        if N_old < 0.0001:
+            W_old = 0.0
+            T_old = age_in_days
+            N_old = 0.0
 
-        # Multiply by the exchange rate so W_new is stored in SEK
+        N_new = N_old + n
         W_new = W_old + (n * b * fx_val)
 
-        T_new = ((W_old * T_old) + (n * b * t)) / W_new if W_new > 0 else t
+        # Weighted average age calculation
+        T_new = ((W_old * T_old) + (n * b * fx_val * age_in_days)) / W_new if W_new > 0 else age_in_days
         B_new = W_new / N_new if N_new > 0 else 0
         p["N"], p["W"], p["T"], p["B"] = N_new, W_new, T_new, B_new
+        
     elif "sälj" in transaction_type:
         p["BF"] += n * (b - p["B"])
-        p["W"] = p["W"] - (n * p["B"])
+        p["W"] = max(p["W"] - (n * p["B"]), 0.0)
         p["N"] = max(p["N"] - n, 0.0)
-        if p["N"] <= 0: p["W"], p["N"], p["T"], p["B"] = 0.0, 0.0, 0.0, 0.0
+        
+        # Absolute hard reset if position is fully closed out
+        if p["N"] < 0.0001: 
+            p["W"] = 0.0
+            p["N"] = 0.0
+            p["T"] = 0.0
+            p["B"] = 0.0
 
 
 # =========================================================

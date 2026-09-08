@@ -80,6 +80,24 @@ if user_input == "y":
             ## supress stderr from yf
             with open(os.devnull, 'w') as f, contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
                 df = yf.download(nam, start=start, end=end, auto_adjust=False, progress=False)
+            
+            if not df.empty:
+                # Handle multi-index columns safely by flattening or checking level 0
+                # This creates a temporary view or checks the 'Close' path structurally
+                try:
+                    # If it's a MultiIndex, 'Close' might be at level 0
+                    close_series = df[('Close', nam)] if ('Close', nam) in df.columns else df['Close']
+                except (KeyError, TypeError):
+                    # Fallback to flattening column names temporarily for the check
+                    temp_df = df.copy()
+                    temp_df.columns = [col[0] if isinstance(col, tuple) else col for col in temp_df.columns]
+                    close_series = temp_df['Close'] if 'Close' in temp_df.columns else temp_df.iloc[:, 0]
+
+                # Trim data from the first NaN date onwards
+                if close_series.isna().any():
+                    first_nan_idx = close_series.isna().idxmax()
+                    df = df.loc[:first_nan_idx].iloc[:-1]
+
             if df.empty:
                 print(f"No data found for {nam} between {start} - {end}")
             else:
